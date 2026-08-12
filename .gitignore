@@ -1,0 +1,29 @@
+# Secretos y datos locales: nunca subirlos al repositorio
+.secrets/
+bitacora.md
+.env
+.env.*
+!.env.example
+**/node_modules/
+**/node_modules.broken*/
+**/.expo/
+**/.expo-export-check/
+**/web-build/
+**/*.log
+**/*.err.log
+**/attachments/
+**/.codex-remote-attachments/
+database/dumps/
+*.dump
+*.backup
+*.sql.gz
+
+# Temporales y artefactos generados
+*.apk
+*.aab
+*.bak
+*.tmp
+mobile/android/
+mobile/ios/
+Microsoft/
+mobile/.git-nested-backup/

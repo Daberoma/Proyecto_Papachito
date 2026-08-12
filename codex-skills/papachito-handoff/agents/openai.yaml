@@ -1,0 +1,4 @@
+interface:
+  display_name: "Papachito Handoff"
+  short_description: "Preserve and continue the Papachito migration safely"
+  default_prompt: "Use $papachito-handoff to inspect the current Papachito state, preserve the legacy system, and implement the next migration step without exposing credentials."

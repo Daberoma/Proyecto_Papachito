@@ -1,0 +1,7 @@
+BEGIN;
+
+ALTER TABLE products
+    ADD COLUMN IF NOT EXISTS barcode VARCHAR(80),
+    ADD COLUMN IF NOT EXISTS description TEXT;
+
+COMMIT;

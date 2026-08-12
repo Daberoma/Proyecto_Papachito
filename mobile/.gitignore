@@ -1,0 +1,9 @@
+node_modules/
+node_modules.broken*/
+web-build/
+.expo/
+*.log
+*.err.log
+android/
+ios/
+.env*

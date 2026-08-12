@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Donde Papachito",
+    "slug": "donde-papachito",
+    "version": "0.1.0",
+    "scheme": "papachito",
+    "orientation": "portrait",
+    "icon": "./icon.png",
+    "android": {
+      "icon": "./icon.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./icon.png",
+        "backgroundColor": "#1f2022"
+      },
+      "package": "com.papachito.mobile",
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE"
+      ]
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-camera",
+      "./plugins/with-cleartext-traffic"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5be2f58d-05d4-44a6-8624-e046046adedd"
+      }
+    },
+    "owner": "papachito"
+  }
+}
