@@ -1,56 +1,16 @@
 import express from 'express';
 import cors from 'cors';
-import pg from 'pg';
-import crypto from 'crypto';
-
-const { Pool } = pg;
-const PORT = Number(process.env.PORT || 8090);
-const DB_PASSWORD = process.env.PAPACHITO_PG_PASSWORD;
-
-if (!DB_PASSWORD) {
-  console.error('Falta PAPACHITO_PG_PASSWORD');
-  process.exit(1);
-}
-
-const pool = new Pool({
-  host: '127.0.0.1',
-  port: 5432,
-  database: 'papachito_app',
-  user: 'papachito_app',
-  password: DB_PASSWORD,
-  max: 8,
-});
+import { PORT } from './src/config.js';
+import { pool } from './src/db/pool.js';
+import { stableUuid } from './src/utils/stableUuid.js';
+import { healthRouter } from './src/routes/health.routes.js';
+import { catalogRouter } from './src/routes/catalog.routes.js';
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
-
-const stableUuid = (seed) => {
-  const text = String(seed || '');
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text)) return text.toLowerCase();
-  const hex = crypto.createHash('sha1').update(`papachito-mobile-${text}`).digest('hex').slice(0, 32);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-};
-
-app.get('/api/salud', async (_req, res) => {
-  const result = await pool.query('select now() as now');
-  res.json({ ok: true, now: result.rows[0].now });
-});
-
-app.get('/api/catalogo', async (_req, res) => {
-  const result = await pool.query(`
-    SELECT p.id, p.legacy_id, p.sku, p.barcode, p.name, p.description,
-           p.sale_price AS price, p.unit_code AS unit,
-           COALESCE(c.name,'Otros') AS category,
-           COALESCE(s.quantity,0) AS stock
-    FROM products p
-    LEFT JOIN categories c ON c.id = p.category_id
-    LEFT JOIN product_stock s ON s.product_id = p.id AND s.warehouse_id = 20
-    WHERE p.active
-    ORDER BY p.name
-  `);
-  res.json({ ok: true, products: result.rows });
-});
+app.use(healthRouter());
+app.use(catalogRouter());
 
 app.post('/api/config/productos', async (req, res) => {
   const name = String(req.body.name || '').trim();
