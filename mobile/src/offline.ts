@@ -3,7 +3,9 @@ export type OfflineSale={id:string,seller:string,items:any[],total:number,paymen
 const SALES_KEY='papachito.offline.sales';
 const SELLER_KEY='papachito.seller';
 const API_KEY='papachito.api.base';
+const API_HISTORY_KEY='papachito.api.history';
 const CATALOG_KEY='papachito.catalog';
+const SIMPLE_VIEW_KEY='papachito.simple.view';
 export async function getSales():Promise<OfflineSale[]>{try{return JSON.parse(await AsyncStorage.getItem(SALES_KEY)||'[]')}catch{return[]}}
 export async function queueSale(s:OfflineSale){const all=await getSales();all.push(s);await AsyncStorage.setItem(SALES_KEY,JSON.stringify(all));return all}
 export async function replaceSales(s:OfflineSale[]){await AsyncStorage.setItem(SALES_KEY,JSON.stringify(s))}
@@ -12,7 +14,11 @@ export async function getSeller(){return (await AsyncStorage.getItem(SELLER_KEY)
 export async function setSeller(v:string){await AsyncStorage.setItem(SELLER_KEY,v.trim())}
 export async function clearSeller(){await AsyncStorage.removeItem(SELLER_KEY)}
 export async function getApiBase(){return (await AsyncStorage.getItem(API_KEY))||''}
-export async function setApiBase(v:string){await AsyncStorage.setItem(API_KEY,v)}
+export async function getApiBases():Promise<string[]>{try{return JSON.parse(await AsyncStorage.getItem(API_HISTORY_KEY)||'[]')}catch{return[]}}
+export async function rememberApiBase(v:string){const value=v.trim().replace(/\/$/,'');if(!value)return;const all=await getApiBases();await AsyncStorage.setItem(API_HISTORY_KEY,JSON.stringify([value,...all.filter((item)=>item!==value)].slice(0,8)))}
+export async function setApiBase(v:string){await AsyncStorage.setItem(API_KEY,v);await rememberApiBase(v)}
+export async function getSimpleView(){return (await AsyncStorage.getItem(SIMPLE_VIEW_KEY))==='true'}
+export async function setSimpleView(v:boolean){await AsyncStorage.setItem(SIMPLE_VIEW_KEY,String(v))}
 export async function getCatalog<T=any[]>():Promise<T>{try{return JSON.parse(await AsyncStorage.getItem(CATALOG_KEY)||'[]')}catch{return [] as T}}
 export async function setCatalog(value:any[]){await AsyncStorage.setItem(CATALOG_KEY,JSON.stringify(value))}
 export async function detectApiBase(candidates:string[]):Promise<string>{

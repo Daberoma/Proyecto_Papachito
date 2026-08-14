@@ -1,0 +1,492 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, useWindowDimensions, type DimensionValue } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
+import { useCameraPermissions } from 'expo-camera';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getSales,getApiBase,getApiBases,getCatalog,getSeller,getSimpleView,queueSale,removeSale,setSeller,setApiBase,setSimpleView as persistSimpleView,setCatalog,discoverApiBase,detectApiBase,syncPendingSales,type OfflineSale } from './offline';
+import { API,actions,apiCandidates,classifyProduct,fallbackProducts,money,saleTime,type CartItem,type Product,type RemoteReport,type ReportPeriod,type Screen,type SearchResult } from './domain';
+
+export function usePapachitoApp() {
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const isWide = width >= 760;
+  const isNarrow = width < 380;
+  const productCardWidth: DimensionValue = isWide ? '31.8%' : isNarrow ? '100%' : '48.5%';
+
+  const [booting, setBooting] = useState(true);
+  const [hasProfile, setHasProfile] = useState(false);
+  const [setupName, setSetupName] = useState('');
+  const [sellerName, setSellerName] = useState('');
+  const [settingsName, setSettingsName] = useState('');
+  const [screen, setScreen] = useState<Screen>('sale');
+  const [products, setProducts] = useState<Product[]>(fallbackProducts);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [sales, setSales] = useState<OfflineSale[]>([]);
+  const [online, setOnline] = useState(false);
+  const [apiBase, setApiBaseState] = useState(API);
+  const [loadingCatalog, setLoadingCatalog] = useState(true);
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('Todo');
+  const [quickName, setQuickName] = useState('');
+  const [quickPrice, setQuickPrice] = useState('');
+  const [newProductName, setNewProductName] = useState('');
+  const [newProductPrice, setNewProductPrice] = useState('');
+  const [newProductCategory, setNewProductCategory] = useState('Otros');
+  const [cartOpen, setCartOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'digital'>('cash');
+  const [reportPeriod, setReportPeriod] = useState<ReportPeriod>('mes');
+  const [remoteReport, setRemoteReport] = useState<RemoteReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [searchingServer, setSearchingServer] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<string>('');
+  const [simpleView, setSimpleViewState] = useState(false);
+  const [savedApiBases, setSavedApiBases] = useState<string[]>([]);
+  const [addedProductPulse, setAddedProductPulse] = useState('');
+
+  const pendingCount = sales.filter((sale) => sale.status !== 'synced').length;
+  const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0), [cart]);
+  const categories = useMemo(() => ['Todo', ...Array.from(new Set(products.map((item) => item.category || 'Otros')))], [products]);
+  const searchText = search.trim().toLowerCase();
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((item) => {
+      const haystack = `${item.name} ${item.description || ''} ${item.category || ''} ${item.sku || ''} ${item.barcode || ''} ${item.price}`.toLowerCase();
+      const matchesText = !searchText || haystack.includes(searchText);
+      const matchesCategory = category === 'Todo' || (item.category || 'Otros') === category;
+      return matchesText && matchesCategory;
+    });
+  }, [category, products, searchText]);
+
+  const filteredSales = useMemo(() => {
+    if (!searchText) return sales;
+    return sales.filter((sale) => {
+      const itemText = sale.items.map((item) => item.name).join(' ');
+      return `${sale.seller} ${sale.status} ${sale.total} ${itemText}`.toLowerCase().includes(searchText);
+    });
+  }, [sales, searchText]);
+
+  const searchResults = useMemo<SearchResult[]>(() => {
+    if (!searchText) return [];
+    const productResults: SearchResult[] = products
+      .filter((item) => `${item.name} ${item.description || ''} ${item.category || ''} ${item.sku || ''} ${item.barcode || ''} ${item.price}`.toLowerCase().includes(searchText))
+      .slice(0, 5)
+      .map((product) => ({
+        type: 'product',
+        title: product.name,
+        subtitle: `${product.category || 'Producto'} | ${product.description || 'Sin descripcion'} | ${money(Number(product.price))}`,
+        product,
+      }));
+    const saleResults: SearchResult[] = sales
+      .filter((sale) => `${sale.seller} ${sale.status} ${sale.total} ${sale.items.map((item) => item.name).join(' ')}`.toLowerCase().includes(searchText))
+      .slice(-4)
+      .reverse()
+      .map((sale) => ({
+        type: 'sale',
+        title: sale.status === 'synced' ? 'Boleta sincronizada' : 'Boleta pendiente',
+        subtitle: `${saleTime(sale.createdAt)} · ${sale.seller} · ${money(sale.total)}`,
+        sale,
+      }));
+    const actionResults = actions.filter((item) => `${item.title} ${item.subtitle}`.toLowerCase().includes(searchText)).slice(0, 3);
+    return [...productResults, ...saleResults, ...actionResults].slice(0, 8);
+  }, [products, sales, searchText]);
+
+  const todaySales = sales.filter((sale) => new Date(sale.createdAt).toDateString() === new Date().toDateString());
+  const todayTotal = todaySales.reduce((sum, sale) => sum + sale.total, 0);
+  const reportTotal = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
+  const reportDays = useMemo(() => {
+    const rows: { date: string; label: string; total: number }[] = [];
+    for (let i = 6; i >= 0; i -= 1) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const key = date.toDateString();
+      rows.push({
+        date: date.toISOString().slice(0, 10),
+        label: date.toLocaleDateString('es-PE', { weekday: 'short' }),
+        total: sales.filter((sale) => new Date(sale.createdAt).toDateString() === key).reduce((sum, sale) => sum + sale.total, 0),
+      });
+    }
+    return rows;
+  }, [sales]);
+  const maxReport = Math.max(1, ...reportDays.map((day) => day.total));
+  const bestDay = reportDays.reduce((best, day) => (day.total > best.total ? day : best), reportDays[0] || { label: '-', total: 0 });
+  const topProducts = useMemo(() => {
+    if (remoteReport?.topProducts?.length) return remoteReport.topProducts;
+    const map = new Map<string, { name: string; quantity: number; total: number }>();
+    filteredSales.forEach((sale) => {
+      sale.items.forEach((item) => {
+        const key = String(item.id || item.name);
+        const current = map.get(key) || { name: item.name || 'Producto', quantity: 0, total: 0 };
+        const quantity = Number(item.quantity || 1);
+        const price = Number(item.price || 0);
+        current.quantity += quantity;
+        current.total += quantity * price;
+        map.set(key, current);
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 5);
+  }, [filteredSales, remoteReport]);
+  const paymentBreakdown = useMemo(() => {
+    if (remoteReport?.payments?.length) return remoteReport.payments;
+    const cash = filteredSales.filter((sale) => sale.paymentMethod !== 'digital').reduce((sum, sale) => sum + sale.total, 0);
+    const digital = filteredSales.filter((sale) => sale.paymentMethod === 'digital').reduce((sum, sale) => sum + sale.total, 0);
+    return [
+      { label: 'Efectivo', total: cash },
+      { label: 'Yape / Plin', total: digital },
+    ];
+  }, [filteredSales, remoteReport]);
+  const maxProductTotal = Math.max(1, ...topProducts.map((item) => item.total));
+  const maxPaymentTotal = Math.max(1, ...paymentBreakdown.map((item) => item.total));
+  const reportSummary = remoteReport?.summary || { count: filteredSales.length, total: reportTotal, average: filteredSales.length ? reportTotal / filteredSales.length : 0 };
+  const reportSeries = remoteReport?.series?.length ? remoteReport.series : reportDays.map((day) => ({ date: day.date, count: 0, total: day.total }));
+  const reportMax = Math.max(1, ...reportSeries.map((item) => Number(item.total)));
+
+  const refreshSales = useCallback(async (baseOverride?: string) => {
+    const local = await getSales();
+    let merged = local;
+    try {
+      const base = baseOverride || await getApiBase();
+      if (base) {
+        const response = await fetch(`${base}/api/ventas`, { signal: AbortSignal.timeout(1800) });
+        const payload = await response.json();
+        if (response.ok && payload.ok && Array.isArray(payload.sales)) {
+          const historical: OfflineSale[] = payload.sales.map((sale: any) => ({
+            id: `remote-${sale.uuid}`,
+            remoteUuid: sale.uuid,
+            seller: sale.customer_name || 'Histórico',
+            items: sale.items || [],
+            total: Number(sale.total || 0),
+            paymentMethod: sale.payment_method === 'legacy_12' ? 'digital' : 'cash',
+            createdAt: sale.sold_at || new Date().toISOString(),
+            status: 'synced',
+          }));
+          const localIds = new Set(local.map((sale) => sale.remoteUuid || sale.id));
+          merged = [...local, ...historical.filter((sale) => !localIds.has(sale.remoteUuid || sale.id))];
+        }
+      }
+    } catch { /* el historial local sigue disponible sin conexión */ }
+    setSales(merged);
+  }, []);
+
+  const cancelSale = useCallback((sale: OfflineSale) => {
+    Alert.alert('Eliminar venta', 'La venta se quitará del historial local y, si ya fue enviada, se anulará en la base de datos.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: async () => {
+        try {
+          if (sale.remoteUuid) {
+            const base = await detectApiBase(apiCandidates);
+            const response = await fetch(`${base}/api/ventas/${encodeURIComponent(sale.remoteUuid)}`, { method: 'DELETE' });
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) throw new Error(payload.message || 'No se pudo anular');
+          }
+          await removeSale(sale.id);
+          await refreshSales();
+          Alert.alert('Venta eliminada', 'La operación fue quitada correctamente.');
+        } catch (error: any) {
+          Alert.alert('No se pudo eliminar', error?.message || 'Revisa la conexión e inténtalo de nuevo.');
+        }
+      } },
+    ]);
+  }, [refreshSales]);
+
+  const loadCatalog = useCallback(async (preferredBase?: string) => {
+    setLoadingCatalog(true);
+    const cached = await getCatalog<Product[]>();
+    if (cached.length) setProducts(cached);
+    try {
+      const net = await NetInfo.fetch();
+      const ipAddress = (net.details as any)?.ipAddress as string | undefined;
+      setSearchingServer(true);
+      // Se prueba primero el servidor indicado por QR o el último guardado.
+      // Así el cambio de Wi‑Fi no obliga a esperar todo el barrido de la red.
+      const storedBase = await getApiBase();
+      let base = preferredBase || storedBase;
+      let response: Response | null = null;
+      // Si ya conocemos la API, no hacemos un barrido de 254 direcciones.
+      if (base) {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const controller = new AbortController();
+          timer = setTimeout(() => controller.abort(), 1400);
+          response = await fetch(`${base}/api/catalogo`, { signal: controller.signal });
+          if (!response.ok) response = null;
+        } catch {
+          response = null;
+        } finally {
+          // Evita dejar temporizadores activos tras una respuesta rápida o un timeout.
+          // El catálogo se muestra desde caché mientras esta comprobación ocurre.
+          if (timer) clearTimeout(timer);
+        }
+      }
+      if (!response) {
+        base = await discoverApiBase([preferredBase || '', storedBase, ...apiCandidates], ipAddress);
+        response = await fetch(`${base}/api/catalogo`);
+      }
+      await setApiBase(base);
+      setApiBaseState(base);
+      setSavedApiBases(await getApiBases());
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.message || 'No se pudo cargar el catálogo');
+      const catalog = payload.products?.length ? payload.products : fallbackProducts;
+      const normalized = catalog.map((product: Product) => ({ ...product, category: classifyProduct(product) }));
+      setProducts(normalized);
+      await setCatalog(normalized);
+      setOnline(true);
+    } catch {
+      setOnline(false);
+      setProducts((current) => (current.length ? current : fallbackProducts));
+    } finally {
+      setSearchingServer(false);
+      setLoadingCatalog(false);
+    }
+  }, []);
+
+  const syncNow = useCallback(async () => {
+    try {
+      const base = await detectApiBase(apiCandidates);
+      setApiBaseState(base);
+      setSavedApiBases(await getApiBases());
+      const result = await syncPendingSales(base);
+      setOnline(result.online);
+      if (result.synced > 0) setLastSyncAt(new Date().toISOString());
+      await refreshSales();
+    } catch {
+      setOnline(false);
+      await refreshSales();
+    }
+  }, [refreshSales]);
+
+  const openScanner = async () => {
+    if (!cameraPermission?.granted) {
+      const permission = await requestCameraPermission();
+      if (!permission.granted) {
+        Alert.alert('Permiso de cámara', 'Activa la cámara para escanear el QR o configura la IP manualmente.');
+        return;
+      }
+    }
+    setScannerOpen(true);
+  };
+
+  const connectFromQr = async (raw: string) => {
+    try {
+      const value = raw.trim();
+      let api = '';
+      if (value.startsWith('papachito://')) {
+        const query = value.split('?')[1] || '';
+        const encoded = query.split('&').find((part) => part.startsWith('api='))?.slice(4) || '';
+        api = decodeURIComponent(encoded);
+      } else if (/^https?:\/\//i.test(value)) {
+        api = value;
+      }
+      if (!/^https?:\/\/[^\s/]+:\d+$/.test(api || '')) throw new Error('QR no válido');
+      setScannerOpen(false);
+      setApiBaseState(api!.replace(/\/$/, ''));
+      await setApiBase(api!.replace(/\/$/, ''));
+      setSavedApiBases(await getApiBases());
+      await loadCatalog(api!.replace(/\/$/, ''));
+      await syncNow();
+      Alert.alert('Conectado', 'Servidor guardado y sincronización iniciada.');
+    } catch (error: any) {
+      Alert.alert('QR no válido', error?.message || 'Escanea el QR mostrado por Papachito.');
+    }
+  };
+
+  const loadReport = useCallback(async (period: ReportPeriod) => {
+    setReportLoading(true);
+    try {
+      const base = await detectApiBase(apiCandidates);
+      setApiBaseState(base);
+      const response = await fetch(`${base}/api/reportes?periodo=${period}`);
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.message || 'No se pudo cargar reporte');
+      setRemoteReport(payload as RemoteReport);
+      setOnline(true);
+    } catch {
+      setOnline(false);
+    } finally {
+      setReportLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const storedName = (await getSeller()).trim();
+      if (storedName) {
+        setSellerName(storedName);
+        setSettingsName(storedName);
+        setHasProfile(true);
+      }
+      const storedApi = await getApiBase();
+      if (storedApi) setApiBaseState(storedApi);
+      setSavedApiBases(await getApiBases());
+      setSimpleViewState(await getSimpleView());
+      const cached = await getCatalog<Product[]>();
+      if (cached.length) setProducts(cached);
+      await refreshSales();
+      await loadCatalog();
+      setBooting(false);
+      // La interfaz y el catálogo en caché quedan disponibles de inmediato.
+      // La sincronización de pendientes continúa en segundo plano y no bloquea el arranque.
+      void syncNow();
+    })();
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      if (state.isConnected) {
+        loadCatalog();
+        syncNow();
+      } else {
+        setOnline(false);
+      }
+    });
+    const timer = setInterval(syncNow, 15000);
+    return () => {
+      unsubscribe();
+      clearInterval(timer);
+    };
+  }, [loadCatalog, refreshSales, syncNow]);
+
+  useEffect(() => {
+    if (screen === 'report' && hasProfile) void loadReport(reportPeriod);
+  }, [hasProfile, loadReport, reportPeriod, screen]);
+
+  const continueSetup = async () => {
+    const name = setupName.trim();
+    if (!name) {
+      Alert.alert('Falta tu nombre', 'Escribe tu nombre para continuar.');
+      return;
+    }
+    await setSeller(name);
+    setSellerName(name);
+    setSettingsName(name);
+    setHasProfile(true);
+  };
+
+  const saveSettingsName = async () => {
+    const name = settingsName.trim();
+    if (!name) {
+      Alert.alert('Nombre vacío', 'Escribe un nombre válido.');
+      return;
+    }
+    await setSeller(name);
+    setSellerName(name);
+    Alert.alert('Listo', 'Nombre actualizado.');
+  };
+
+  const saveServer = async () => {
+    const value = apiBase.trim().replace(/\/$/, '');
+    if (!/^https?:\/\/[^\s/]+:\d+$/.test(value)) {
+      Alert.alert('Servidor inválido', 'Usa un formato como http://192.168.1.10:8090');
+      return;
+    }
+    await setApiBase(value);
+    setApiBaseState(value);
+    setSavedApiBases(await getApiBases());
+    await syncNow();
+    await refreshSales(value);
+  };
+
+  const addProduct = useCallback((product: Product) => {
+    setAddedProductPulse(`${String(product.id)}-${Date.now()}`);
+    setCart((current) => {
+      const found = current.find((item) => String(item.id) === String(product.id));
+      if (!found) return [...current, { ...product, quantity: 1 }];
+      return current.map((item) => (String(item.id) === String(product.id) ? { ...item, quantity: item.quantity + 1 } : item));
+    });
+    setCartOpen(true);
+  }, []);
+
+  const removeOne = (product: CartItem) => {
+    setCart((current) =>
+      current
+        .map((item) => (String(item.id) === String(product.id) ? { ...item, quantity: item.quantity - 1 } : item))
+        .filter((item) => item.quantity > 0),
+    );
+  };
+
+  const removeProduct = (product: CartItem) => {
+    setCart((current) => current.filter((item) => String(item.id) !== String(product.id)));
+  };
+
+  const addQuickProduct = () => {
+    const name = quickName.trim();
+    const price = Number(quickPrice.replace(',', '.'));
+    if (!name || !Number.isFinite(price) || price <= 0) {
+      Alert.alert('Producto incompleto', 'Escribe nombre y precio en soles.');
+      return;
+    }
+    addProduct({ id: `quick-${Date.now()}`, name, price, category: 'Rápido' });
+    setQuickName('');
+    setQuickPrice('');
+  };
+
+  const createProduct = async () => {
+    const name = newProductName.trim();
+    const price = Number(newProductPrice.replace(',', '.'));
+    const categoryName = newProductCategory.trim() || 'Otros';
+    if (!name || !Number.isFinite(price) || price <= 0) {
+      Alert.alert('Producto incompleto', 'Escribe nombre y precio válidos.');
+      return;
+    }
+    try {
+      const base = await detectApiBase(apiCandidates);
+      const response = await fetch(`${base}/api/config/productos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, price, category: categoryName, description: 'Producto creado desde Donde Papachito' }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.message || 'No se pudo guardar el producto');
+      setNewProductName('');
+      setNewProductPrice('');
+      setNewProductCategory('Otros');
+      await loadCatalog(base);
+      Alert.alert('Producto guardado', 'Ya aparece en el catálogo para venderlo.');
+    } catch (error: any) {
+      Alert.alert('No se pudo guardar', error?.message || 'Conecta la laptop y vuelve a intentarlo.');
+    }
+  };
+
+  const confirmSale = async () => {
+    if (!cart.length) {
+      Alert.alert('Carrito vacío', 'Agrega al menos un producto.');
+      return;
+    }
+    await queueSale({
+      id: `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      seller: sellerName,
+      items: cart.map((item) => ({ id: item.id, name: item.name, price: Number(item.price), quantity: item.quantity })),
+      total: cartTotal,
+      paymentMethod,
+      createdAt: new Date().toISOString(),
+      status: 'pending',
+    });
+    setCart([]);
+    setCartOpen(false);
+    await refreshSales();
+    await syncNow();
+    Alert.alert(paymentMethod === 'digital' ? 'Pago digital guardado' : 'Venta guardada', online ? 'Guardada y enviada si la API está activa.' : 'Sin conexión: queda pendiente.');
+  };
+
+  const selectSearchResult = (result: SearchResult) => {
+    if (result.type === 'product') {
+      setScreen('sale');
+      addProduct(result.product);
+    }
+    if (result.type === 'sale') { setScreen('history'); setCartOpen(false); }
+    if (result.type === 'action') { setScreen(result.screen); if (result.screen !== 'sale') setCartOpen(false); }
+    setSearch('');
+  };
+
+  const navigateTo = useCallback((next: Screen) => {
+    setScreen(next);
+    if (next !== 'sale') setCartOpen(false);
+  }, []);
+
+  const toggleSimpleView = useCallback(async (value: boolean) => {
+    setSimpleViewState(value);
+    await persistSimpleView(value);
+  }, []);
+
+
+  return { insets,isWide,isNarrow,productCardWidth,booting,hasProfile,setupName,sellerName,settingsName,screen,products,cart,sales,online,apiBase,loadingCatalog,search,category,quickName,quickPrice,newProductName,newProductPrice,newProductCategory,cartOpen,paymentMethod,reportPeriod,remoteReport,reportLoading,scannerOpen,searchingServer,lastSyncAt,simpleView,savedApiBases,addedProductPulse,pendingCount,cartTotal,categories,searchText,filteredProducts,filteredSales,searchResults,todaySales,todayTotal,reportTotal,reportDays,maxReport,bestDay,topProducts,paymentBreakdown,maxProductTotal,maxPaymentTotal,reportSummary,reportSeries,reportMax,cameraPermission,requestCameraPermission,setSetupName,setSellerName,setSettingsName,setScreen,setProducts,setCart,setSales,setOnline,setApiBaseState,setLoadingCatalog,setSearch,setCategory,setQuickName,setQuickPrice,setNewProductName,setNewProductPrice,setNewProductCategory,setCartOpen,setPaymentMethod,setReportPeriod,setRemoteReport,setReportLoading,setScannerOpen,setSearchingServer,setLastSyncAt,toggleSimpleView,navigateTo,refreshSales,cancelSale,loadCatalog,syncNow,openScanner,connectFromQr,loadReport,continueSetup,saveSettingsName,saveServer,addProduct,removeOne,removeProduct,addQuickProduct,createProduct,confirmSale,selectSearchResult };
+}

@@ -4,7 +4,7 @@
     "slug": "donde-papachito",
     "version": "0.1.0",
     "scheme": "papachito",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./icon.png",
     "android": {
       "icon": "./icon.png",
