@@ -3,6 +3,15 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 chcp 65001 | Out-Null
 $root = $PSScriptRoot
 $node = 'C:\Program Files\nodejs\node.exe'
+
+# Si la tarea se inició con Windows PowerShell 5.1, continúa en PowerShell 7
+# para una consola UTF-8 y una visualización más estable del QR.
+$pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+if ($pwsh -and $PSVersionTable.PSEdition -ne 'Core') {
+  & $pwsh.Source -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath
+  exit $LASTEXITCODE
+}
+
 $secretFile = Join-Path $root '.secrets\pg-password.xml'
 if (-not (Test-Path $secretFile)) { Write-Host 'Falta configurar la contraseña PostgreSQL.'; exit 2 }
 
