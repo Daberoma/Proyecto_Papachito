@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from 'react';
-import Animated, { SlideInUp, useAnimatedStyle, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
+import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import {
   Image,
   Pressable,
@@ -85,7 +85,7 @@ export function CartSummary({ cart, total, onOpen, onConfirm }: { cart: CartItem
 export function CartSheet({ cart, total, paymentMethod, simpleView, onPaymentMethod, safeBottom, onClose, onAdd, onRemoveOne, onRemove, onConfirm }: { cart: CartItem[]; total: number; paymentMethod: 'cash' | 'digital'; simpleView: boolean; onPaymentMethod: (method: 'cash' | 'digital') => void; safeBottom: number; onClose: () => void; onAdd: (product: Product) => void; onRemoveOne: (product: CartItem) => void; onRemove: (product: CartItem) => void; onConfirm: () => void }) {
   const [qrExpanded, setQrExpanded] = useState(false);
   return (
-    <Animated.View entering={SlideInUp.springify().damping(16)} style={[styles.sheet, { bottom: 96 + safeBottom }]}>
+    <Animated.View entering={FadeIn.duration(180)} style={[styles.sheet, { bottom: 96 + safeBottom }]}>
       <View style={styles.sheetHandle} />
       <View style={styles.sheetHeader}>
         <View style={styles.rowText}>
@@ -156,9 +156,9 @@ export function CartSheet({ cart, total, paymentMethod, simpleView, onPaymentMet
 export const ProductCard = memo(function ProductCard({ item, width, simpleView, highlighted, onPress }: { item: Product; width: DimensionValue; simpleView: boolean; highlighted?: boolean; onPress: (product: Product) => void }) {
   const pulse = useSharedValue(0);
   useEffect(() => {
-    if (highlighted) pulse.value = withSequence(withSpring(1), withSpring(0));
+    if (highlighted) pulse.value = withSequence(withTiming(1, { duration: 90 }), withTiming(0, { duration: 150 }));
   }, [highlighted, pulse]);
-  const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pulse.value * 0.06 }] }));
+  const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pulse.value * 0.025 }] }));
   return (
     <Animated.View style={[{ width }, pulseStyle]}>
     <Pressable onPress={() => onPress(item)} style={({ pressed }) => [styles.productCard, highlighted && styles.productCardHighlighted, pressed && styles.productCardPressed, { width: '100%' }]}>
