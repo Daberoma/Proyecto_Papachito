@@ -16,7 +16,9 @@
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
-        "ACCESS_WIFI_STATE"
+        "ACCESS_WIFI_STATE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -24,11 +26,11 @@
       "expo-camera",
       "./plugins/with-cleartext-traffic"
     ],
+    "owner": "mrcntral",
     "extra": {
       "eas": {
-        "projectId": "5be2f58d-05d4-44a6-8624-e046046adedd"
+        "projectId": "03750869-2d6a-4deb-ae7c-c1c78ceaa4d4"
       }
-    },
-    "owner": "papachito"
+    }
   }
 }
