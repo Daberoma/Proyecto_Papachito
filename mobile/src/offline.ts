@@ -7,7 +7,15 @@ const API_HISTORY_KEY='papachito.api.history';
 const CATALOG_KEY='papachito.catalog';
 const SIMPLE_VIEW_KEY='papachito.simple.view';
 const PAYMENT_CONFIG_KEY='papachito.payment.config';
-export type PaymentConfig={yapeEnabled:boolean,plinEnabled:boolean};
+export type PaymentMethodKey='yape'|'plin'|'bbva';
+export type PaymentConfig={
+ yapeEnabled:boolean;
+ plinEnabled:boolean;
+ bbvaEnabled:boolean;
+ yapeQrUri?:string;
+ plinQrUri?:string;
+ bbvaQrUri?:string;
+};
 export async function getSales():Promise<OfflineSale[]>{try{return JSON.parse(await AsyncStorage.getItem(SALES_KEY)||'[]')}catch{return[]}}
 export async function queueSale(s:OfflineSale){const all=await getSales();all.push(s);await AsyncStorage.setItem(SALES_KEY,JSON.stringify(all));return all}
 export async function replaceSales(s:OfflineSale[]){await AsyncStorage.setItem(SALES_KEY,JSON.stringify(s))}
@@ -22,7 +30,7 @@ export async function setApiBase(v:string){await AsyncStorage.setItem(API_KEY,v)
 export async function getSimpleView(){return (await AsyncStorage.getItem(SIMPLE_VIEW_KEY))==='true'}
 export async function setSimpleView(v:boolean){await AsyncStorage.setItem(SIMPLE_VIEW_KEY,String(v))}
 export async function getPaymentConfig():Promise<PaymentConfig>{
- try{return {...{yapeEnabled:true,plinEnabled:false},...JSON.parse(await AsyncStorage.getItem(PAYMENT_CONFIG_KEY)||'{}')}}catch{return {yapeEnabled:true,plinEnabled:false}}
+ try{return {...{yapeEnabled:true,plinEnabled:false,bbvaEnabled:false},...JSON.parse(await AsyncStorage.getItem(PAYMENT_CONFIG_KEY)||'{}')}}catch{return {yapeEnabled:true,plinEnabled:false,bbvaEnabled:false}}
 }
 export async function setPaymentConfig(value:PaymentConfig){await AsyncStorage.setItem(PAYMENT_CONFIG_KEY,JSON.stringify(value))}
 export async function getCatalog<T=any[]>():Promise<T>{try{return JSON.parse(await AsyncStorage.getItem(CATALOG_KEY)||'[]')}catch{return [] as T}}

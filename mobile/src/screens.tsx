@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { Image, Keyboard, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { CameraView } from 'expo-camera';
-import { Package, ReceiptText, Search, SlidersHorizontal, X } from 'lucide-react-native';
+import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Package, ReceiptText, Search, X } from 'lucide-react-native';
 import { money, reportDateLabel, reportPeriodLabel, saleTime, shortDate, type ReportPeriod, type Screen } from './domain';
 import { BottomNav, CartSheet, CartSummary, DesktopNav, Empty, Kpi, ProductCard, RankRow, SaleRow, SectionTitle, Stat, styles, screenTitle } from './ui';
 import type { usePapachitoApp } from './usePapachitoApp';
+import type { OfflineSale } from './offline';
 
 type AppState = ReturnType<typeof usePapachitoApp>;
 
@@ -39,8 +40,15 @@ export function ProfileSetupScreen({ name, onNameChange, onContinue }: { name: s
 }
 
 export function MainShell({ app }: { app: AppState }) {
-  const { insets,isWide,isNarrow,productCardWidth,booting,hasProfile,setupName,sellerName,settingsName,screen,products,cart,sales,online,apiBase,loadingCatalog,search,category,cartOpen,paymentMethod,reportPeriod,remoteReport,reportLoading,scannerOpen,searchingServer,lastSyncAt,simpleView,paymentConfig,savedApiBases,addedProductPulse,availableUpdate,updateChecking,updateInstalling,installedVersion,installedVersionCode,pendingCount,cartTotal,categories,searchText,filteredProducts,filteredSales,visibleSales,searchResults,todaySales,todayTotal,reportTotal,reportDays,maxReport,bestDay,topProducts,paymentBreakdown,sellerBreakdown,maxProductTotal,maxPaymentTotal,maxSellerTotal,reportSummary,reportSeries,reportMax,cameraPermission,requestCameraPermission,setSetupName,setSellerName,setSettingsName,setScreen,setProducts,setCart,setSales,setOnline,setApiBaseState,setLoadingCatalog,setSearch,setCategory,setCartOpen,setPaymentMethod,setReportPeriod,setRemoteReport,setReportLoading,setScannerOpen,setSearchingServer,setLastSyncAt,toggleSimpleView,togglePaymentMethod,navigateTo,refreshSales,cancelSale,loadCatalog,syncNow,openScanner,connectFromQr,loadReport,continueSetup,saveSettingsName,saveServer,checkForUpdate,installUpdate,addProduct,removeOne,removeProduct,confirmSale,selectSearchResult } = app;
+  const { insets,isWide,isNarrow,productCardWidth,booting,hasProfile,setupName,sellerName,settingsName,screen,products,cart,sales,online,apiBase,loadingCatalog,search,category,cartOpen,paymentMethod,reportPeriod,remoteReport,calendarSaleCounts,reportLoading,scannerOpen,searchingServer,lastSyncAt,simpleView,paymentConfig,savedApiBases,addedProductPulse,availableUpdate,updateChecking,updateInstalling,installedVersion,installedVersionCode,pendingCount,cartTotal,categories,searchText,filteredProducts,filteredSales,visibleSales,searchResults,todaySales,todayTotal,reportTotal,reportDays,maxReport,bestDay,topProducts,paymentBreakdown,sellerBreakdown,maxProductTotal,maxPaymentTotal,maxSellerTotal,reportSummary,reportSeries,reportMax,cameraPermission,requestCameraPermission,setSetupName,setSellerName,setSettingsName,setScreen,setProducts,setCart,setSales,setOnline,setApiBaseState,setLoadingCatalog,setSearch,setCategory,setCartOpen,setPaymentMethod,setReportPeriod,setRemoteReport,setReportLoading,setScannerOpen,setSearchingServer,setLastSyncAt,toggleSimpleView,togglePaymentMethod,pickPaymentQr,removePaymentQr,navigateTo,refreshSales,cancelSale,simulateSale,loadCatalog,loadSalesForDate,syncNow,openScanner,connectFromQr,loadReport,continueSetup,saveSettingsName,saveServer,checkForUpdate,installUpdate,addProduct,removeOne,removeProduct,confirmSale,selectSearchResult } = app;
   const [searchFocused, setSearchFocused] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedDaySales, setSelectedDaySales] = useState<OfflineSale[]>([]);
+  const [daySalesLoading, setDaySalesLoading] = useState(false);
+  const [selectedSale, setSelectedSale] = useState<OfflineSale | null>(null);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [productRenderLimit, setProductRenderLimit] = useState(20);
   useEffect(() => {
     setProductRenderLimit(20);
@@ -52,6 +60,36 @@ export function MainShell({ app }: { app: AppState }) {
     }, 90);
     return () => clearTimeout(timer);
   }, [filteredProducts.length, productRenderLimit]);
+  const chartUnit = reportPeriod === 'ano' || reportPeriod === 'historico' ? 'mes' : 'día';
+  const chartColor = reportPeriod === 'dia' ? '#1b6b58' : reportPeriod === 'mes' ? '#315b91' : reportPeriod === 'ano' ? '#b27624' : '#7b4f8b';
+  const showChartValues = reportPeriod === 'dia' || reportPeriod === 'mes';
+  const paymentOptions = [
+    { key: 'yape', label: 'Yape', enabledKey: 'yapeEnabled', qrKey: 'yapeQrUri', color: '#7b4f8b' },
+    { key: 'plin', label: 'Plin', enabledKey: 'plinEnabled', qrKey: 'plinQrUri', color: '#315b91' },
+    { key: 'bbva', label: 'BBVA', enabledKey: 'bbvaEnabled', qrKey: 'bbvaQrUri', color: '#174f42' },
+  ] as const;
+  const padDate = (value: number) => String(value).padStart(2, '0');
+  const calendarDateKey = (year: number, month: number, day: number) => `${year}-${padDate(month + 1)}-${padDate(day)}`;
+  const calendarYear = calendarMonth.getFullYear();
+  const calendarMonthIndex = calendarMonth.getMonth();
+  const calendarDaysInMonth = new Date(calendarYear, calendarMonthIndex + 1, 0).getDate();
+  const calendarStartOffset = (new Date(calendarYear, calendarMonthIndex, 1).getDay() + 6) % 7;
+  const calendarCells: Array<number | null> = [...Array(calendarStartOffset).fill(null), ...Array.from({ length: calendarDaysInMonth }, (_, index) => index + 1)];
+  const calendarCounts = { ...calendarSaleCounts, ...Object.fromEntries(sales.map((sale) => [sale.createdAt.slice(0, 10), Math.max(calendarSaleCounts[sale.createdAt.slice(0, 10)] || 0, 1)])) };
+  const calendarMonthLabel = calendarMonth.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const historyToday = visibleSales.filter((sale) => sale.createdAt.slice(0, 10) === todayKey && sale.status === 'synced');
+  const historyPending = visibleSales.filter((sale) => sale.status !== 'synced');
+  const historyOlder = visibleSales.filter((sale) => sale.createdAt.slice(0, 10) !== todayKey && sale.status === 'synced');
+  const historyPreview = [...historyToday, ...historyPending, ...historyOlder].slice(0, 5);
+  const openReportDay = async (date: string) => {
+    setSelectedDay(date);
+    setSelectedDaySales([]);
+    setDaySalesLoading(true);
+    const result = await loadSalesForDate(date);
+    setSelectedDaySales(result);
+    setDaySalesLoading(false);
+  };
   return (
   <View style={styles.safe}>
     <View style={[styles.shell, isWide && styles.shellWide, isWide && styles.shellDesktop]}>
@@ -70,46 +108,79 @@ export function MainShell({ app }: { app: AppState }) {
 
       {!online && screen === 'sale' ? <Text style={styles.offlineHint}>Puedes cobrar ahora; se sincroniza al volver internet.</Text> : null}
 
+      {screen !== 'settings' && screen !== 'payments' ? <View style={styles.searchArea}>
         <View style={[styles.globalSearch, isNarrow && styles.globalSearchCompact, searchFocused && styles.globalSearchFocused]}>
-          <Search size={20} color={searchFocused ? '#174f42' : '#89918c'} strokeWidth={2.2} />
-          <TextInput
+          <Search size={21} color={searchFocused ? '#174f42' : '#89918c'} strokeWidth={2.2} />
+              <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Buscar producto o boleta"
+            placeholder={screen === 'history' ? 'Buscar producto, vendedor o fecha' : screen === 'report' ? 'Buscar en reportes' : 'Buscar producto o boleta'}
             style={styles.searchInput}
             placeholderTextColor="#89918c"
             selectionColor="#174f42"
             cursorColor="#174f42"
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
           />
           {search ? (
-            <Pressable onPress={() => setSearch('')} style={({ pressed }) => [styles.clearButton, pressed && styles.buttonPressed]}>
-              <X size={18} color="#174f42" />
-          </Pressable>
-        ) : null}
-      </View>
-
-      {searchText ? (
-        <View style={styles.searchPanel}>
-          {searchResults.length === 0 ? (
-            <Empty title="Sin resultados" copy="Prueba con otro producto, monto, vendedor o acción." compact />
-          ) : (
-            searchResults.map((result, index) => (
-              <Pressable key={`${result.type}-${index}`} onPress={() => selectSearchResult(result)} style={styles.resultRow}>
-                <View style={styles.resultIcon}>{result.type === 'product' ? <Package size={18} color="#174f42" /> : result.type === 'sale' ? <ReceiptText size={18} color="#174f42" /> : <SlidersHorizontal size={18} color="#174f42" />}</View>
-                <Text style={styles.resultType}>{result.type === 'product' ? 'Producto' : result.type === 'sale' ? 'Boleta' : 'Acción'}</Text>
-                <View style={styles.rowText}>
-                  <Text style={styles.resultTitle}>{result.title}</Text>
-                  <Text style={styles.muted}>{result.subtitle}</Text>
-                </View>
-              </Pressable>
-            ))
-          )}
+            <Pressable accessibilityLabel="Limpiar búsqueda" onPress={() => setSearch('')} style={({ pressed }) => [styles.clearButton, pressed && styles.buttonPressed]}>
+              <X size={19} color="#174f42" />
+            </Pressable>
+          ) : null}
         </View>
+
+        {searchFocused && searchText ? (
+          <View style={[styles.searchPanel, isNarrow && styles.searchPanelCompact]}>
+            <View style={styles.searchPanelHeader}>
+              <View>
+                <Text style={styles.searchPanelEyebrow}>RESULTADOS</Text>
+                <Text style={styles.searchPanelTitle}>{searchResults.length ? 'Coincidencias encontradas' : 'No encontramos eso'}</Text>
+              </View>
+              {searchResults.length ? <Text style={styles.searchPanelCount}>{searchResults.length}</Text> : null}
+            </View>
+            {searchResults.length === 0 ? (
+              <View style={styles.searchEmpty}>
+                <Search size={21} color="#7b8580" />
+                <View style={styles.searchEmptyCopy}>
+                  <Text style={styles.searchEmptyTitle}>Prueba con otro nombre o monto</Text>
+                  <Text style={styles.searchEmptyText}>La búsqueda solo muestra productos y boletas.</Text>
+                </View>
+              </View>
+            ) : (
+              searchResults.map((result, index) => (
+                <Pressable key={`${result.type}-${index}`} onPress={() => selectSearchResult(result)} style={({ pressed }) => [styles.resultRow, pressed && styles.resultRowPressed]}>
+                  <View style={[styles.resultIcon, result.type === 'sale' && styles.resultIconSale]}>
+                    {result.type === 'product' ? <Package size={18} color="#174f42" /> : <ReceiptText size={18} color="#315b91" />}
+                  </View>
+                  <View style={styles.resultCopy}>
+                    <Text style={styles.resultTitle} numberOfLines={1}>{result.title}</Text>
+                    <Text style={styles.resultSubtitle} numberOfLines={1}>{result.subtitle}</Text>
+                  </View>
+                  <View style={[styles.resultTag, result.type === 'sale' && styles.resultTagSale]}>
+                    <Text style={[styles.resultTagText, result.type === 'sale' && styles.resultTagTextSale]}>{result.type === 'product' ? 'Producto' : 'Boleta'}</Text>
+                  </View>
+                </Pressable>
+              ))
+            )}
+          </View>
+        ) : null}
+      </View> : null}
+
+      {searchFocused && searchText ? (
+        <Pressable
+          accessibilityLabel="Cerrar resultados de búsqueda"
+          onPress={() => {
+            Keyboard.dismiss();
+            setSearchFocused(false);
+          }}
+          style={styles.searchBackdrop}
+        />
       ) : null}
 
-      <ScrollView nestedScrollEnabled contentInsetAdjustmentBehavior="automatic" contentContainerStyle={[styles.content, isNarrow && styles.contentCompact, { paddingBottom: 184 + insets.bottom }]}>
+      <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={[styles.content, isNarrow && styles.contentCompact, { paddingBottom: 184 + insets.bottom }]}>
         {screen === 'sale' && (
         <View style={[styles.grid, isWide && styles.gridWide]}>
             <View style={styles.mainColumn}>
@@ -136,14 +207,19 @@ export function MainShell({ app }: { app: AppState }) {
         {screen === 'history' && (
           <>
             <View style={styles.summaryCard}>
-              <Kpi label="Ventas de hoy" value={String(todaySales.length)} inverse />
-              <Kpi label="Total real" value={money(todayTotal)} inverse />
+              <Kpi label="Ventas de hoy" value={String(todaySales.length)} inverse compact={isNarrow} />
+              <Kpi label="Total real" value={money(todayTotal)} inverse compact={isNarrow} />
             </View>
             <SectionTitle eyebrow="ACTIVIDAD" title="Historial" right="Actualizar" onRight={refreshSales} />
             {filteredSales.length === 0 ? (
               <Empty title={searchText ? 'Sin boletas' : 'No hay ventas'} copy={searchText ? 'No hay historial que coincida con la busqueda.' : 'Las ventas guardadas apareceran aqui.'} />
             ) : (
-              visibleSales.map((sale) => <SaleRow key={sale.id} sale={sale} onDelete={() => cancelSale(sale)} />)
+              <View style={styles.historySections}>
+                {historyToday.length ? <View style={styles.historySection}><SectionTitle compact eyebrow="HOY" title={`${historyToday.length} venta${historyToday.length === 1 ? '' : 's'}`} /><SaleRow key={historyToday[0].id} sale={historyToday[0]} onPress={() => setSelectedSale(historyToday[0])} onDelete={() => cancelSale(historyToday[0])} /></View> : null}
+                {historyPending.length ? <View style={styles.historySection}><SectionTitle compact eyebrow="PENDIENTES" title={`${historyPending.length} por enviar`} /><SaleRow key={historyPending[0].id} sale={historyPending[0]} onPress={() => setSelectedSale(historyPending[0])} onDelete={() => cancelSale(historyPending[0])} /></View> : null}
+                {historyOlder.length ? <View style={styles.historySection}><SectionTitle compact eyebrow="ANTERIORES" title={`${historyOlder.length} ventas`} /><SaleRow key={historyOlder[0].id} sale={historyOlder[0]} onPress={() => setSelectedSale(historyOlder[0])} onDelete={() => cancelSale(historyOlder[0])} /></View> : null}
+                {visibleSales.length > 1 ? <Pressable onPress={() => setHistoryModalOpen(true)} style={({ pressed }) => [styles.historyMoreButton, pressed && styles.buttonPressed]}><Text style={styles.historyMoreText}>Ver historial completo · {visibleSales.length}</Text></Pressable> : null}
+              </View>
             )}
           </>
         )}
@@ -158,47 +234,71 @@ export function MainShell({ app }: { app: AppState }) {
                   </Pressable>
                 ))}
               </View>
-              <View style={styles.summaryCard}>
-                <Kpi label={reportPeriodLabel(reportPeriod)} value={money(reportSummary.total)} tone="green" />
-                <Kpi label="Operaciones" value={String(reportSummary.count)} tone="blue" />
-                <Kpi label="Promedio" value={money(reportSummary.average)} tone="amber" />
-              </View>
-              <View style={styles.reportHero}>
-                <View style={styles.reportHeroText}>
-                  <Text style={styles.eyebrow}>REPORTE</Text>
-                  <Text style={styles.reportHeroTitle}>Ventas claras, sin montos abreviados</Text>
-                  <Text style={styles.reportHeroCopy}>El periodo actual vuelve a empezar cada mes; tus ventas anteriores quedan guardadas en Histórico.</Text>
+              <View style={styles.calendarPanel}>
+                <View style={styles.calendarHeader}>
+                  <View style={styles.rowText}>
+                    <Text style={styles.eyebrow}>CALENDARIO</Text>
+                    <Text style={styles.calendarTitle}>{calendarMonthLabel}</Text>
+                  </View>
+                  <View style={styles.calendarNav}>
+                    <Pressable onPress={() => setCalendarMonth(new Date(calendarYear, calendarMonthIndex - 1, 1))} style={({ pressed }) => [styles.calendarNavButton, pressed && styles.buttonPressed]}><ChevronLeft size={18} color="#174f42" /></Pressable>
+                    <Pressable onPress={() => setCalendarMonth(new Date(calendarYear, calendarMonthIndex + 1, 1))} style={({ pressed }) => [styles.calendarNavButton, pressed && styles.buttonPressed]}><ChevronRight size={18} color="#174f42" /></Pressable>
+                  </View>
                 </View>
-                <View style={styles.reportHeroBadge}>
-                  <Text style={styles.reportHeroBadgeLabel}>Acumulado histórico</Text>
-                  <Text style={styles.reportHeroBadgeValue}>{money(remoteReport?.historical?.total ?? reportTotal)}</Text>
-                  <Text style={styles.reportHeroBadgeTotal}>{remoteReport?.historical?.count ?? filteredSales.length} operaciones</Text>
+                <View style={styles.calendarWeekRow}>
+                  {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day, index) => <Text key={`${day}-${index}`} style={styles.calendarWeekDay}>{day}</Text>)}
                 </View>
+                <View style={styles.calendarGrid}>
+                  {calendarCells.map((day, index) => {
+                    if (!day) return <View key={`empty-${index}`} style={styles.calendarCell} />;
+                    const date = calendarDateKey(calendarYear, calendarMonthIndex, day);
+                    const saleCount = calendarCounts[date] || 0;
+                    const hasSales = saleCount > 0;
+                    return (
+                      <Pressable key={date} onPress={() => void openReportDay(date)} style={({ pressed }) => [styles.calendarCell, saleCount >= 5 ? styles.calendarCellBusy : saleCount >= 2 ? styles.calendarCellActive : hasSales && styles.calendarCellMarked, pressed && styles.buttonPressed]}>
+                        <Text style={[styles.calendarDayText, hasSales && styles.calendarDayTextMarked]}>{day}</Text>
+                        {hasSales ? <View style={styles.calendarDot} /> : null}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <View style={styles.calendarHintRow}><CalendarDays size={14} color="#6a716d" /><Text style={styles.calendarHint}>Toca un día para ver sus ventas</Text></View>
               </View>
-              <View style={styles.panelLarge}>
-                <SectionTitle eyebrow="TENDENCIA" title={`Ventas ${reportPeriodLabel(reportPeriod).toLowerCase()}`} right={reportLoading ? 'Cargando…' : 'Actualizar'} onRight={() => loadReport(reportPeriod)} />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reportSummaryScroll}>
+                <View style={styles.reportKpiSlot}><Kpi label={reportPeriodLabel(reportPeriod)} value={money(reportSummary.total)} tone="green" compact={isNarrow} /></View>
+                <View style={styles.reportKpiSlot}><Kpi label="Operaciones" value={String(reportSummary.count)} tone="blue" compact={isNarrow} /></View>
+                <View style={styles.reportKpiSlot}><Kpi label="Promedio" value={money(reportSummary.average)} tone="amber" compact={isNarrow} /></View>
+              </ScrollView>
+              <View style={[styles.panelLarge, isNarrow && styles.panelLargeMobile]}>
+                <SectionTitle compact={isNarrow} eyebrow={`MOVIMIENTO · POR ${chartUnit.toUpperCase()}`} title={reportPeriod === 'historico' ? 'Ventas históricas' : reportPeriod === 'ano' ? 'Ventas del año' : reportPeriod === 'mes' ? 'Ventas del mes' : 'Ventas recientes'} right={reportLoading ? 'Cargando…' : 'Actualizar'} onRight={() => loadReport(reportPeriod)} />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   {reportSeries.length === 0 ? <Empty title="Sin ventas en este periodo" copy="Cambia a otro periodo o registra una venta." compact /> : <View style={[styles.chartLarge, reportSeries.length > 14 && styles.chartLargeWide]}>
-                    {reportSeries.map((item, index) => (
-                      <View key={item.date} style={styles.chartCol}>
-                        <Text style={styles.chartValue}>{money(Number(item.total))}</Text>
-                        <View style={[styles.chartBar, { height: 22 + (Number(item.total) / reportMax) * 126, backgroundColor: ['#1b6b58', '#4b74a8', '#c98a31', '#8a5b9a'][index % 4] }]} />
-                        <Text style={styles.chartLabel}>{reportDateLabel(item.date, reportPeriod)}</Text>
-                      </View>
-                    ))}
+                    {reportSeries.map((item) => {
+                      const total = Number(item.total) || 0;
+                      const height = total > 0 ? Math.max(10, (total / reportMax) * 128) : 5;
+                      return (
+                        <View key={item.date} style={styles.chartCol}>
+                          <Text style={styles.chartValue} numberOfLines={1}>{showChartValues ? (total > 0 ? money(total) : '—') : ''}</Text>
+                          <View style={styles.chartBarTrack}>
+                            <View style={[styles.chartBar, { height, backgroundColor: chartColor }]} />
+                          </View>
+                          <Text style={styles.chartLabel} numberOfLines={1}>{reportDateLabel(item.date, reportPeriod)}</Text>
+                        </View>
+                      );
+                    })}
                   </View>}
                 </ScrollView>
               </View>
-              <View style={styles.panelLarge}>
-                <SectionTitle eyebrow="HISTÓRICO" title="Ventas acumuladas" />
+              <View style={[styles.panelLarge, isNarrow && styles.panelLargeMobile]}>
+                <SectionTitle compact={isNarrow} eyebrow="HISTÓRICO" title="Ventas acumuladas" />
                 <Text style={styles.muted}>Desde {remoteReport?.historical?.firstDate ? reportDateLabel(remoteReport.historical.firstDate, 'mes') : 'el inicio'} hasta {remoteReport?.historical?.lastDate ? reportDateLabel(remoteReport.historical.lastDate, 'mes') : 'hoy'}.</Text>
                 <View style={styles.historicalRow}>
                   <Stat label="Total histórico" value={money(remoteReport?.historical?.total ?? reportTotal)} />
                   <Stat label="Boletas" value={String(remoteReport?.historical?.count ?? filteredSales.length)} />
                 </View>
               </View>
-              <View style={styles.panelLarge}>
-                <SectionTitle eyebrow="PRODUCTOS" title="Más vendidos" />
+              <View style={[styles.panelLarge, isNarrow && styles.panelLargeMobile]}>
+                <SectionTitle compact={isNarrow} eyebrow="PRODUCTOS" title="Más vendidos" />
                 {topProducts.length === 0 ? (
                   <Empty title="Sin productos vendidos" copy="Cuando registres ventas, aqui apareceran los productos con mayor movimiento." compact />
                 ) : (
@@ -210,19 +310,19 @@ export function MainShell({ app }: { app: AppState }) {
             </View>
             <View style={styles.sideColumn}>
               <View style={styles.panel}>
-                <SectionTitle eyebrow="LECTURA" title="Resumen" />
+                <SectionTitle compact={isNarrow} eyebrow="LECTURA" title="Resumen" />
                 <Stat label="Pendientes" value={String(pendingCount)} />
                 <Stat label="Estado API" value={online ? 'Conectada' : 'Offline'} />
                 <Stat label="Filtro activo" value={searchText || 'Sin filtro'} />
                </View>
                <View style={styles.panel}>
-                <SectionTitle eyebrow="COBROS" title="Medios de pago" />
+                <SectionTitle compact={isNarrow} eyebrow="COBROS" title="Medios de pago" />
                 {paymentBreakdown.map((item) => (
                   <RankRow key={item.label} label={item.label} value={money(item.total)} percent={item.total / maxPaymentTotal} compact />
                 ))}
               </View>
               <View style={styles.panel}>
-                <SectionTitle eyebrow="DETALLE" title="Últimas ventas" />
+                <SectionTitle compact={isNarrow} eyebrow="DETALLE" title="Últimas ventas" />
                 {filteredSales.length === 0 ? (
                   <Empty title="Sin ventas" copy="Aún no hay movimientos para mostrar." compact />
                 ) : (
@@ -238,7 +338,7 @@ export function MainShell({ app }: { app: AppState }) {
                 )}
               </View>
               <View style={styles.panel}>
-                <SectionTitle eyebrow="PERSONAS" title="Ventas por vendedor" />
+                <SectionTitle compact={isNarrow} eyebrow="PERSONAS" title="Ventas por vendedor" />
                 {sellerBreakdown.length === 0 ? (
                   <Empty title="Sin vendedores" copy="Los nombres aparecerán al registrar ventas." compact />
                 ) : (
@@ -251,28 +351,68 @@ export function MainShell({ app }: { app: AppState }) {
           </View>
         )}
 
+        {screen === 'payments' && (
+          <View style={[styles.grid, isWide && styles.gridWide]}>
+            <View style={styles.mainColumn}>
+              <Pressable onPress={() => navigateTo('settings')} style={({ pressed }) => [styles.backLink, pressed && styles.buttonPressed]}>
+                <ArrowLeft size={18} color="#174f42" />
+                <Text style={styles.backLinkText}>Volver a Ajustes</Text>
+              </Pressable>
+              <View style={styles.panel}>
+                <SectionTitle eyebrow="COBROS" title="Medios de pago" />
+                <Text style={styles.muted}>Activa cada medio y guarda su QR en el teléfono.</Text>
+              </View>
+              {paymentOptions.map((option) => {
+                const qrUri = paymentConfig[option.qrKey];
+                const enabled = paymentConfig[option.enabledKey];
+                return (
+                  <View key={option.key} style={[styles.paymentMethodCard, { borderLeftColor: option.color }]}>
+                    <View style={styles.paymentMethodHeader}>
+                      <View style={styles.rowText}>
+                        <Text style={styles.paymentMethodTitle}>{option.label}</Text>
+                        <Text style={styles.muted}>{enabled ? 'Disponible al cobrar' : 'Desactivado'}</Text>
+                      </View>
+                      <Switch value={enabled} onValueChange={(value) => togglePaymentMethod(option.enabledKey, value)} trackColor={{ false: '#d8d4cc', true: '#9ac9ae' }} thumbColor={enabled ? '#174f42' : '#fff'} />
+                    </View>
+                    <View style={styles.qrUploadRow}>
+                      <View style={styles.qrPreviewSmall}>
+                        {qrUri ? <Image source={{ uri: qrUri }} style={styles.qrPreviewImage} resizeMode="contain" /> : option.key === 'yape' ? <Image source={require('../yape-qr.jpg')} style={styles.qrPreviewImage} resizeMode="contain" /> : <Text style={styles.qrPreviewText}>QR</Text>}
+                      </View>
+                      <View style={styles.rowText}>
+                        <Text style={styles.paymentMethodTitle}>{qrUri ? 'QR guardado' : option.key === 'yape' ? 'QR predeterminado' : 'Sin QR'}</Text>
+                        <Pressable onPress={() => pickPaymentQr(option.key)} style={({ pressed }) => [styles.secondaryButton, styles.uploadButton, pressed && styles.buttonPressed]}>
+                          <Text style={styles.secondaryText}>{qrUri ? 'Cambiar imagen' : 'Subir imagen'}</Text>
+                        </Pressable>
+                        {qrUri ? <Pressable onPress={() => removePaymentQr(option.key)}><Text style={styles.deleteSaleText}>Quitar imagen</Text></Pressable> : null}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+              <View style={styles.panel}>
+                <Text style={styles.muted}>Más medios de pago podrán agregarse después con QR o número.</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         {screen === 'settings' && (
           <View style={[styles.grid, isWide && styles.gridWide]}>
             <View style={styles.mainColumn}>
               <View style={styles.panel}>
                 <SectionTitle eyebrow="PERFIL" title="Nombre del vendedor" />
-                <TextInput value={settingsName} onChangeText={setSettingsName} placeholder="Nombre" style={styles.input} />
-                <Pressable onPress={saveSettingsName} style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}>
-                  <Text style={styles.primaryText}>Guardar nombre</Text>
+                <TextInput value={settingsName} onChangeText={setSettingsName} editable={editingName} placeholder="Nombre" style={[styles.input, !editingName && styles.inputLocked]} />
+                <Pressable onPress={() => { if (editingName) { void saveSettingsName(); setEditingName(false); } else setEditingName(true); }} style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}>
+                  <Text style={styles.primaryText}>{editingName ? 'Guardar nombre' : 'Cambiar nombre'}</Text>
                 </Pressable>
               </View>
                <View style={styles.panel}>
-                 <SectionTitle eyebrow="COBROS DIGITALES" title="Yape / Plin" />
-                 <Text style={styles.muted}>Activa los medios que realmente usas al cobrar.</Text>
-                 <View style={styles.preferenceRow}>
-                   <View style={styles.rowText}><Text style={styles.preferenceTitle}>Yape</Text><Text style={styles.muted}>Usar QR de Yape</Text></View>
-                   <Switch value={paymentConfig.yapeEnabled} onValueChange={(value) => togglePaymentMethod('yapeEnabled', value)} trackColor={{ false: '#d8d4cc', true: '#9ac9ae' }} thumbColor={paymentConfig.yapeEnabled ? '#174f42' : '#fff'} />
-                 </View>
-                 <View style={styles.preferenceRow}>
-                   <View style={styles.rowText}><Text style={styles.preferenceTitle}>Plin</Text><Text style={styles.muted}>Preparado para su QR</Text></View>
-                   <Switch value={paymentConfig.plinEnabled} onValueChange={(value) => togglePaymentMethod('plinEnabled', value)} trackColor={{ false: '#d8d4cc', true: '#9ac9ae' }} thumbColor={paymentConfig.plinEnabled ? '#174f42' : '#fff'} />
-                 </View>
-                  <Text style={styles.muted}>Activa los medios que realmente usas al cobrar.</Text>
+                 <SectionTitle eyebrow="COBROS DIGITALES" title="Medios de pago" />
+                 <Text style={styles.muted}>Configura Yape, Plin, BBVA y sus imágenes QR.</Text>
+                 <Pressable onPress={() => navigateTo('payments')} style={({ pressed }) => [styles.paymentSettingsCard, pressed && styles.buttonPressed]}>
+                   <View style={styles.rowText}><Text style={styles.preferenceTitle}>Yape · Plin · BBVA</Text><Text style={styles.muted}>Activar medios y subir QR</Text></View>
+                   <ArrowLeft size={20} color="#174f42" style={{ transform: [{ rotate: '180deg' }] }} />
+                 </Pressable>
                 </View>
               <View style={styles.panel}>
                 <SectionTitle eyebrow="APLICACIÓN" title="Actualización" />
@@ -303,7 +443,7 @@ export function MainShell({ app }: { app: AppState }) {
                 <Pressable onPress={saveServer} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
                   <Text style={styles.secondaryText}>Guardar servidor y probar</Text>
                 </Pressable>
-                <Pressable onPress={syncNow} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
+               <Pressable onPress={syncNow} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
                   <Text style={styles.secondaryText}>Reconectar y sincronizar</Text>
                 </Pressable>
                 <Pressable onPress={openScanner} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
@@ -315,6 +455,93 @@ export function MainShell({ app }: { app: AppState }) {
           </View>
         )}
       </ScrollView>
+
+      {selectedDay ? (
+        <View style={styles.dayModalOverlay}>
+          <Pressable onPress={() => setSelectedDay(null)} style={styles.dayModalDismiss} />
+          <View style={styles.dayModalCard}>
+            <View style={styles.dayModalHeader}>
+              <View style={styles.rowText}>
+                <Text style={styles.eyebrow}>VENTAS DEL DÍA</Text>
+                <Text style={styles.dayModalTitle}>{reportDateLabel(selectedDay, 'dia')}</Text>
+              </View>
+              <View style={styles.panel}>
+                <SectionTitle eyebrow="PRUEBAS" title="Simular una venta" />
+                <Text style={styles.muted}>Crea una venta local de prueba para revisar el historial, el estado pendiente y el detalle sin enviar datos reales.</Text>
+                <Pressable onPress={simulateSale} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
+                  <Text style={styles.secondaryText}>Crear venta de prueba</Text>
+                </Pressable>
+              </View>
+              <Pressable onPress={() => setSelectedDay(null)} style={styles.closeButton}><X size={20} color="#174f42" /></Pressable>
+            </View>
+            {daySalesLoading ? <Text style={styles.muted}>Cargando ventas…</Text> : selectedDaySales.length === 0 ? (
+              <Empty title="Sin ventas este día" copy="No hay operaciones registradas en esta fecha." compact />
+            ) : (
+              <ScrollView style={styles.daySalesList}>
+                {selectedDaySales.map((sale) => (
+                  <View key={sale.id} style={styles.daySaleRow}>
+                    <View style={styles.rowText}>
+                      <Text style={styles.daySaleTitle}>{saleTime(sale.createdAt)} · {sale.seller}</Text>
+                      <Text style={styles.muted}>{sale.items.length} {sale.items.length === 1 ? 'producto' : 'productos'} · {sale.paymentMethod === 'digital' ? 'Digital' : 'Efectivo'}</Text>
+                    </View>
+                    <Text style={styles.daySaleTotal}>{money(sale.total)}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+            <View style={styles.dayModalTotal}><Text style={styles.dayModalTotalLabel}>Total del día</Text><Text style={styles.dayModalTotalValue}>{money(selectedDaySales.reduce((sum, sale) => sum + Number(sale.total || 0), 0))}</Text></View>
+          </View>
+        </View>
+      ) : null}
+
+      {selectedSale ? (
+        <View style={styles.dayModalOverlay}>
+          <Pressable onPress={() => setSelectedSale(null)} style={styles.dayModalDismiss} />
+          <View style={styles.dayModalCard}>
+            <View style={styles.dayModalHeader}>
+              <View style={styles.rowText}>
+                <Text style={styles.eyebrow}>DETALLE DE BOLETA</Text>
+                <Text style={styles.dayModalTitle}>{reportDateLabel(selectedSale.createdAt, 'dia')}</Text>
+                <Text style={styles.muted}>{saleTime(selectedSale.createdAt)} · {selectedSale.seller}</Text>
+              </View>
+              <Pressable onPress={() => setSelectedSale(null)} style={styles.closeButton}><X size={20} color="#174f42" /></Pressable>
+            </View>
+            <View style={styles.saleDetailMeta}>
+              <Text style={styles.saleDetailMetaText}>{selectedSale.status === 'synced' ? 'Sincronizada' : 'Pendiente'}</Text>
+              <Text style={styles.saleDetailMetaText}>{selectedSale.paymentMethod === 'digital' ? 'Pago digital' : 'Efectivo'}</Text>
+            </View>
+            <ScrollView style={styles.saleDetailItems}>
+              {selectedSale.items.map((item: any, index: number) => {
+                const quantity = Number(item.quantity || 1);
+                const price = Number(item.price || item.unitPrice || 0);
+                return (
+                  <View key={`${selectedSale.id}-${index}`} style={styles.saleDetailRow}>
+                    <View style={styles.rowText}>
+                      <Text style={styles.saleDetailName}>{item.name || 'Producto'}</Text>
+                      <Text style={styles.muted}>{quantity} × {money(price)}</Text>
+                    </View>
+                    <Text style={styles.daySaleTotal}>{money(quantity * price)}</Text>
+                  </View>
+                );
+              })}
+            </ScrollView>
+            <View style={styles.dayModalTotal}><Text style={styles.dayModalTotalLabel}>Total de la venta</Text><Text style={styles.dayModalTotalValue}>{money(selectedSale.total)}</Text></View>
+          </View>
+        </View>
+      ) : null}
+
+      {historyModalOpen ? (
+        <View style={styles.dayModalOverlay}>
+          <Pressable onPress={() => setHistoryModalOpen(false)} style={styles.dayModalDismiss} />
+          <View style={styles.historyModalCard}>
+            <View style={styles.dayModalHeader}>
+              <View style={styles.rowText}><Text style={styles.eyebrow}>HISTORIAL COMPLETO</Text><Text style={styles.dayModalTitle}>Ventas guardadas</Text></View>
+              <Pressable onPress={() => setHistoryModalOpen(false)} style={styles.closeButton}><X size={20} color="#174f42" /></Pressable>
+            </View>
+            <ScrollView style={styles.historyModalList}>{visibleSales.map((sale) => <View key={sale.id} style={styles.historyModalItem}><SaleRow sale={sale} onPress={() => { setHistoryModalOpen(false); setSelectedSale(sale); }} onDelete={() => cancelSale(sale)} /></View>)}</ScrollView>
+          </View>
+        </View>
+      ) : null}
 
       {cart.length > 0 && !cartOpen && screen === 'sale' ? (
           <Pressable onPress={() => setCartOpen(true)} style={({ pressed }) => [styles.cartFab, { bottom: 96 + insets.bottom }, pressed && styles.buttonPressed]}>
