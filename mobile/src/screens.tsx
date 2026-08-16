@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { Package, ReceiptText, Search, SlidersHorizontal, X } from 'lucide-react-native';
 import { money, reportDateLabel, reportPeriodLabel, saleTime, shortDate, type ReportPeriod, type Screen } from './domain';
-import { BottomNav, CartSheet, CartSummary, Empty, Kpi, ProductCard, RankRow, SaleRow, SectionTitle, Stat, styles, screenTitle } from './ui';
+import { BottomNav, CartSheet, Empty, Kpi, ProductCard, RankRow, SaleRow, SectionTitle, Stat, styles, screenTitle } from './ui';
 import type { usePapachitoApp } from './usePapachitoApp';
 
 type AppState = ReturnType<typeof usePapachitoApp>;
@@ -39,12 +39,23 @@ export function ProfileSetupScreen({ name, onNameChange, onContinue }: { name: s
 }
 
 export function MainShell({ app }: { app: AppState }) {
-  const { insets,isWide,isNarrow,productCardWidth,booting,hasProfile,setupName,sellerName,settingsName,screen,products,cart,sales,online,apiBase,loadingCatalog,search,category,quickName,quickPrice,newProductName,newProductPrice,newProductCategory,cartOpen,paymentMethod,reportPeriod,remoteReport,reportLoading,scannerOpen,searchingServer,lastSyncAt,simpleView,savedApiBases,addedProductPulse,pendingCount,cartTotal,categories,searchText,filteredProducts,filteredSales,searchResults,todaySales,todayTotal,reportTotal,reportDays,maxReport,bestDay,topProducts,paymentBreakdown,maxProductTotal,maxPaymentTotal,reportSummary,reportSeries,reportMax,cameraPermission,requestCameraPermission,setSetupName,setSellerName,setSettingsName,setScreen,setProducts,setCart,setSales,setOnline,setApiBaseState,setLoadingCatalog,setSearch,setCategory,setQuickName,setQuickPrice,setNewProductName,setNewProductPrice,setNewProductCategory,setCartOpen,setPaymentMethod,setReportPeriod,setRemoteReport,setReportLoading,setScannerOpen,setSearchingServer,setLastSyncAt,toggleSimpleView,navigateTo,refreshSales,cancelSale,loadCatalog,syncNow,openScanner,connectFromQr,loadReport,continueSetup,saveSettingsName,saveServer,addProduct,removeOne,removeProduct,addQuickProduct,createProduct,confirmSale,selectSearchResult } = app;
+  const { insets,isWide,isNarrow,productCardWidth,booting,hasProfile,setupName,sellerName,settingsName,screen,products,cart,sales,online,apiBase,loadingCatalog,search,category,cartOpen,paymentMethod,reportPeriod,remoteReport,reportLoading,scannerOpen,searchingServer,lastSyncAt,simpleView,paymentConfig,savedApiBases,addedProductPulse,pendingCount,cartTotal,categories,searchText,filteredProducts,filteredSales,visibleSales,searchResults,todaySales,todayTotal,reportTotal,reportDays,maxReport,bestDay,topProducts,paymentBreakdown,sellerBreakdown,maxProductTotal,maxPaymentTotal,maxSellerTotal,reportSummary,reportSeries,reportMax,cameraPermission,requestCameraPermission,setSetupName,setSellerName,setSettingsName,setScreen,setProducts,setCart,setSales,setOnline,setApiBaseState,setLoadingCatalog,setSearch,setCategory,setCartOpen,setPaymentMethod,setReportPeriod,setRemoteReport,setReportLoading,setScannerOpen,setSearchingServer,setLastSyncAt,toggleSimpleView,togglePaymentMethod,navigateTo,refreshSales,cancelSale,loadCatalog,syncNow,openScanner,connectFromQr,loadReport,continueSetup,saveSettingsName,saveServer,addProduct,removeOne,removeProduct,confirmSale,selectSearchResult } = app;
   const [searchFocused, setSearchFocused] = useState(false);
+  const [productRenderLimit, setProductRenderLimit] = useState(20);
+  useEffect(() => {
+    setProductRenderLimit(20);
+  }, [category, searchText, products.length]);
+  useEffect(() => {
+    if (productRenderLimit >= filteredProducts.length) return;
+    const timer = setTimeout(() => {
+      setProductRenderLimit((current) => Math.min(current + 20, filteredProducts.length));
+    }, 90);
+    return () => clearTimeout(timer);
+  }, [filteredProducts.length, productRenderLimit]);
   return (
   <View style={styles.safe}>
     <View style={[styles.shell, isWide && styles.shellWide]}>
-      <View style={[styles.header, isNarrow && styles.headerCompact]}>
+      <View style={[styles.header, isNarrow && styles.headerCompact, { paddingTop: Math.max(insets.top + 8, isNarrow ? 18 : 28) }]}>
         <Image source={require('../papachito-logo.jpg')} style={styles.headerLogo} />
         <View style={styles.userBlock}>
           <Text style={styles.brand}>DONDE PAPACHITO</Text>
@@ -52,16 +63,18 @@ export function MainShell({ app }: { app: AppState }) {
           <Text style={styles.userText}>Atiende: {sellerName}</Text>
         </View>
         <View style={[styles.status, online ? styles.statusOnline : styles.statusOffline]}>
-          <Text style={styles.statusText}>{online ? 'Conectado' : 'Offline'}</Text>
+          <Text style={styles.statusText}>{online ? 'Conectado' : 'Sin conexión'}</Text>
         </View>
       </View>
+
+      {!online && screen === 'sale' ? <Text style={styles.offlineHint}>Puedes cobrar ahora; se sincroniza al volver internet.</Text> : null}
 
         <View style={[styles.globalSearch, isNarrow && styles.globalSearchCompact, searchFocused && styles.globalSearchFocused]}>
           <Search size={20} color={searchFocused ? '#174f42' : '#89918c'} strokeWidth={2.2} />
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Buscar productos, boletas o acciones"
+            placeholder="Buscar producto o boleta"
             style={styles.searchInput}
             placeholderTextColor="#89918c"
             selectionColor="#174f42"
@@ -95,12 +108,12 @@ export function MainShell({ app }: { app: AppState }) {
         </View>
       ) : null}
 
-      <ScrollView nestedScrollEnabled contentInsetAdjustmentBehavior="automatic" contentContainerStyle={[styles.content, isNarrow && styles.contentCompact, { paddingBottom: 132 + insets.bottom }]}>
+      <ScrollView nestedScrollEnabled contentInsetAdjustmentBehavior="automatic" contentContainerStyle={[styles.content, isNarrow && styles.contentCompact, { paddingBottom: 184 + insets.bottom }]}>
         {screen === 'sale' && (
         <View style={[styles.grid, isWide && styles.gridWide]}>
             <View style={styles.mainColumn}>
               <SectionTitle eyebrow="CATALOGO" title="Productos" right={loadingCatalog ? 'Cargando' : `${filteredProducts.length} productos`} />
-              {searchingServer ? <Text style={styles.connectionHint}>Buscando servidor en la red…</Text> : null}
+              {searchingServer ? <Text style={styles.connectionHint}>Actualizando catálogo…</Text> : null}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                 {categories.map((item) => (
                     <Pressable key={item} onPress={() => setCategory(item)} style={({ pressed }) => [styles.chip, category === item && styles.chipActive, pressed && styles.buttonPressed]}>
@@ -112,20 +125,9 @@ export function MainShell({ app }: { app: AppState }) {
                 <Empty title="No hay productos" copy="Limpia la busqueda o cambia de categoria." />
               ) : (
                 <View style={styles.productGrid}>
-                  {filteredProducts.map((item) => <ProductCard key={String(item.id)} item={item} width={productCardWidth} simpleView={simpleView} highlighted={addedProductPulse.startsWith(`${String(item.id)}-`)} onPress={addProduct} />)}
+                  {filteredProducts.slice(0, productRenderLimit).map((item) => <ProductCard key={String(item.id)} item={item} width={productCardWidth} simpleView={simpleView} highlighted={addedProductPulse.startsWith(`${String(item.id)}-`)} onPress={addProduct} />)}
                 </View>
               )}
-            </View>
-            <View style={styles.sideColumn}>
-              <SectionTitle eyebrow="RAPIDO" title="Producto manual" />
-              <View style={styles.panel}>
-                <TextInput value={quickName} onChangeText={setQuickName} placeholder="Nombre" style={styles.input} />
-                <TextInput value={quickPrice} onChangeText={setQuickPrice} placeholder="Precio en soles" keyboardType="decimal-pad" style={styles.input} />
-                <Pressable onPress={addQuickProduct} style={styles.secondaryButton}>
-                  <Text style={styles.secondaryText}>Agregar al carrito</Text>
-                </Pressable>
-              </View>
-              <CartSummary cart={cart} total={cartTotal} onOpen={() => setCartOpen(true)} onConfirm={() => setCartOpen(true)} />
             </View>
           </View>
         )}
@@ -140,7 +142,7 @@ export function MainShell({ app }: { app: AppState }) {
             {filteredSales.length === 0 ? (
               <Empty title={searchText ? 'Sin boletas' : 'No hay ventas'} copy={searchText ? 'No hay historial que coincida con la busqueda.' : 'Las ventas guardadas apareceran aqui.'} />
             ) : (
-              filteredSales.slice().reverse().map((sale) => <SaleRow key={sale.id} sale={sale} onDelete={() => cancelSale(sale)} />)
+              visibleSales.map((sale) => <SaleRow key={sale.id} sale={sale} onDelete={() => cancelSale(sale)} />)
             )}
           </>
         )}
@@ -156,9 +158,9 @@ export function MainShell({ app }: { app: AppState }) {
                 ))}
               </View>
               <View style={styles.summaryCard}>
-                <Kpi label={reportPeriodLabel(reportPeriod)} value={money(reportSummary.total)} inverse />
-                <Kpi label="Operaciones" value={String(reportSummary.count)} inverse />
-                <Kpi label="Promedio" value={money(reportSummary.average)} inverse />
+                <Kpi label={reportPeriodLabel(reportPeriod)} value={money(reportSummary.total)} tone="green" />
+                <Kpi label="Operaciones" value={String(reportSummary.count)} tone="blue" />
+                <Kpi label="Promedio" value={money(reportSummary.average)} tone="amber" />
               </View>
               <View style={styles.reportHero}>
                 <View style={styles.reportHeroText}>
@@ -175,15 +177,15 @@ export function MainShell({ app }: { app: AppState }) {
               <View style={styles.panelLarge}>
                 <SectionTitle eyebrow="TENDENCIA" title={`Ventas ${reportPeriodLabel(reportPeriod).toLowerCase()}`} right={reportLoading ? 'Cargando…' : 'Actualizar'} onRight={() => loadReport(reportPeriod)} />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={[styles.chartLarge, reportSeries.length > 14 && styles.chartLargeWide]}>
-                    {reportSeries.map((item) => (
+                  {reportSeries.length === 0 ? <Empty title="Sin ventas en este periodo" copy="Cambia a otro periodo o registra una venta." compact /> : <View style={[styles.chartLarge, reportSeries.length > 14 && styles.chartLargeWide]}>
+                    {reportSeries.map((item, index) => (
                       <View key={item.date} style={styles.chartCol}>
                         <Text style={styles.chartValue}>{money(Number(item.total))}</Text>
-                        <View style={[styles.chartBar, { height: 22 + (Number(item.total) / reportMax) * 126 }]} />
+                        <View style={[styles.chartBar, { height: 22 + (Number(item.total) / reportMax) * 126, backgroundColor: ['#1b6b58', '#4b74a8', '#c98a31', '#8a5b9a'][index % 4] }]} />
                         <Text style={styles.chartLabel}>{reportDateLabel(item.date, reportPeriod)}</Text>
                       </View>
                     ))}
-                  </View>
+                  </View>}
                 </ScrollView>
               </View>
               <View style={styles.panelLarge}>
@@ -234,6 +236,16 @@ export function MainShell({ app }: { app: AppState }) {
                   ))
                 )}
               </View>
+              <View style={styles.panel}>
+                <SectionTitle eyebrow="PERSONAS" title="Ventas por vendedor" />
+                {sellerBreakdown.length === 0 ? (
+                  <Empty title="Sin vendedores" copy="Los nombres aparecerán al registrar ventas." compact />
+                ) : (
+                  sellerBreakdown.map((item) => (
+                    <RankRow key={item.label} label={item.label} detail={`${item.count} ${item.count === 1 ? 'venta' : 'ventas'}`} value={money(item.total)} percent={item.total / maxSellerTotal} compact />
+                  ))
+                )}
+              </View>
             </View>
           </View>
         )}
@@ -248,25 +260,19 @@ export function MainShell({ app }: { app: AppState }) {
                   <Text style={styles.primaryText}>Guardar nombre</Text>
                 </Pressable>
               </View>
-              <View style={styles.panel}>
-                <SectionTitle eyebrow="CATÁLOGO" title="Agregar producto" />
-                <TextInput value={newProductName} onChangeText={setNewProductName} placeholder="Nombre del producto" style={styles.input} />
-                <TextInput value={newProductPrice} onChangeText={setNewProductPrice} placeholder="Precio en soles" keyboardType="decimal-pad" style={styles.input} />
-                <TextInput value={newProductCategory} onChangeText={setNewProductCategory} placeholder="Categoría" style={styles.input} />
-                <Pressable onPress={createProduct} style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}>
-                  <Text style={styles.primaryText}>Guardar producto</Text>
-                </Pressable>
-              </View>
-              <View style={styles.panel}>
-                <SectionTitle eyebrow="PREFERENCIAS" title="Vista simple" />
-                <View style={styles.preferenceRow}>
-                  <View style={styles.rowText}>
-                    <Text style={styles.preferenceTitle}>Solo producto y precio</Text>
-                    <Text style={styles.muted}>Oculta descripción, categoría y detalles adicionales al vender.</Text>
-                  </View>
-                  <Switch value={simpleView} onValueChange={toggleSimpleView} trackColor={{ false: '#d8d4cc', true: '#9ac9ae' }} thumbColor={simpleView ? '#174f42' : '#fff'} />
-                </View>
-              </View>
+               <View style={styles.panel}>
+                 <SectionTitle eyebrow="COBROS DIGITALES" title="Yape / Plin" />
+                 <Text style={styles.muted}>Activa los medios que realmente usas al cobrar.</Text>
+                 <View style={styles.preferenceRow}>
+                   <View style={styles.rowText}><Text style={styles.preferenceTitle}>Yape</Text><Text style={styles.muted}>Usar QR de Yape</Text></View>
+                   <Switch value={paymentConfig.yapeEnabled} onValueChange={(value) => togglePaymentMethod('yapeEnabled', value)} trackColor={{ false: '#d8d4cc', true: '#9ac9ae' }} thumbColor={paymentConfig.yapeEnabled ? '#174f42' : '#fff'} />
+                 </View>
+                 <View style={styles.preferenceRow}>
+                   <View style={styles.rowText}><Text style={styles.preferenceTitle}>Plin</Text><Text style={styles.muted}>Preparado para su QR</Text></View>
+                   <Switch value={paymentConfig.plinEnabled} onValueChange={(value) => togglePaymentMethod('plinEnabled', value)} trackColor={{ false: '#d8d4cc', true: '#9ac9ae' }} thumbColor={paymentConfig.plinEnabled ? '#174f42' : '#fff'} />
+                 </View>
+                 <Text style={styles.muted}>Activa los medios que realmente usas al cobrar.</Text>
+               </View>
               <View style={styles.panel}>
                 <SectionTitle eyebrow="SINCRONIZACION" title="Estado local" />
                 <Stat label="Ventas pendientes" value={String(pendingCount)} />
@@ -291,14 +297,17 @@ export function MainShell({ app }: { app: AppState }) {
         )}
       </ScrollView>
 
-        {cart.length > 0 && !cartOpen && screen === 'sale' ? (
+      {cart.length > 0 && !cartOpen && screen === 'sale' ? (
           <Pressable onPress={() => setCartOpen(true)} style={({ pressed }) => [styles.cartFab, { bottom: 96 + insets.bottom }, pressed && styles.buttonPressed]}>
-          <Text style={styles.cartFabText}>{cart.reduce((sum, item) => sum + item.quantity, 0)} productos</Text>
+          <Text style={styles.cartFabText}>Ver carrito · {cart.reduce((sum, item) => sum + item.quantity, 0)} {cart.reduce((sum, item) => sum + item.quantity, 0) === 1 ? 'producto' : 'productos'}</Text>
           <Text style={styles.cartFabTotal}>{money(cartTotal)}</Text>
         </Pressable>
       ) : null}
 
-      {cartOpen ? <CartSheet cart={cart} total={cartTotal} paymentMethod={paymentMethod} simpleView={simpleView} onPaymentMethod={setPaymentMethod} safeBottom={insets.bottom} onClose={() => setCartOpen(false)} onAdd={addProduct} onRemoveOne={removeOne} onRemove={removeProduct} onConfirm={confirmSale} /> : null}
+      {cartOpen ? <>
+        <Pressable accessibilityLabel="Cerrar pedido" onPress={() => setCartOpen(false)} style={styles.sheetBackdrop} />
+        <CartSheet cart={cart} total={cartTotal} paymentMethod={paymentMethod} simpleView={simpleView} paymentConfig={paymentConfig} onPaymentMethod={setPaymentMethod} safeBottom={insets.bottom} onClose={() => setCartOpen(false)} onAdd={addProduct} onRemoveOne={removeOne} onRemove={removeProduct} onConfirm={confirmSale} />
+      </> : null}
       {scannerOpen ? (
         <View style={styles.scannerOverlay}>
           <View style={styles.scannerPanel}>

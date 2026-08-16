@@ -6,6 +6,8 @@ const API_KEY='papachito.api.base';
 const API_HISTORY_KEY='papachito.api.history';
 const CATALOG_KEY='papachito.catalog';
 const SIMPLE_VIEW_KEY='papachito.simple.view';
+const PAYMENT_CONFIG_KEY='papachito.payment.config';
+export type PaymentConfig={yapeEnabled:boolean,plinEnabled:boolean};
 export async function getSales():Promise<OfflineSale[]>{try{return JSON.parse(await AsyncStorage.getItem(SALES_KEY)||'[]')}catch{return[]}}
 export async function queueSale(s:OfflineSale){const all=await getSales();all.push(s);await AsyncStorage.setItem(SALES_KEY,JSON.stringify(all));return all}
 export async function replaceSales(s:OfflineSale[]){await AsyncStorage.setItem(SALES_KEY,JSON.stringify(s))}
@@ -19,9 +21,13 @@ export async function rememberApiBase(v:string){const value=v.trim().replace(/\/
 export async function setApiBase(v:string){await AsyncStorage.setItem(API_KEY,v);await rememberApiBase(v)}
 export async function getSimpleView(){return (await AsyncStorage.getItem(SIMPLE_VIEW_KEY))==='true'}
 export async function setSimpleView(v:boolean){await AsyncStorage.setItem(SIMPLE_VIEW_KEY,String(v))}
+export async function getPaymentConfig():Promise<PaymentConfig>{
+ try{return {...{yapeEnabled:true,plinEnabled:false},...JSON.parse(await AsyncStorage.getItem(PAYMENT_CONFIG_KEY)||'{}')}}catch{return {yapeEnabled:true,plinEnabled:false}}
+}
+export async function setPaymentConfig(value:PaymentConfig){await AsyncStorage.setItem(PAYMENT_CONFIG_KEY,JSON.stringify(value))}
 export async function getCatalog<T=any[]>():Promise<T>{try{return JSON.parse(await AsyncStorage.getItem(CATALOG_KEY)||'[]')}catch{return [] as T}}
 export async function setCatalog(value:any[]){await AsyncStorage.setItem(CATALOG_KEY,JSON.stringify(value))}
-export async function detectApiBase(candidates:string[]):Promise<string>{
+export async function detectApiBase(candidates:string[], timeoutMs = 900):Promise<string>{
  const saved=await getApiBase();
  // La IP guardada puede pertenecer al Wi‑Fi anterior. Se prueban primero
  // los hosts detectados en la sesión actual y se deja la guardada como respaldo.
@@ -30,7 +36,7 @@ export async function detectApiBase(candidates:string[]):Promise<string>{
   const batch=unique.slice(offset,offset+24);
   const results=await Promise.all(batch.map(async(base)=>{
    const controller=new AbortController();
-   const timer=setTimeout(()=>controller.abort(),900);
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
    try{const res=await fetch(`${base}/api/salud`,{signal:controller.signal});return res.ok?base:''}
    catch{return ''} finally{clearTimeout(timer)}
   }));
@@ -51,12 +57,9 @@ export async function syncPendingSales(apiBase:string):Promise<{online:boolean,s
  const all=await getSales();
  const pending=all.filter((sale)=>sale.status!=='synced');
  if(pending.length===0){
-  try{
-   const res=await fetch(`${apiBase}/api/catalogo`);
-   return {online:res.ok,synced:0};
-  }catch{
-   return {online:false,synced:0};
-  }
+  // No hace falta hacer una petición cada vez que se despierta la app si no
+  // hay nada que sincronizar. El catálogo valida la conexión por separado.
+  return {online:true,synced:0};
  }
  let changed=false;
  let synced=0;

@@ -1,6 +1,6 @@
-import { memo, useEffect, useState } from 'react';
-import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import { memo, useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Image,
   Pressable,
   ScrollView,
@@ -14,7 +14,6 @@ import {
   ClipboardList,
   Minus,
   Maximize2,
-  Minimize2,
   Package,
   Plus,
   ReceiptText,
@@ -58,7 +57,7 @@ export function SectionTitle({ eyebrow, title, right, onRight }: { eyebrow: stri
   );
 }
 
-export function CartSummary({ cart, total, onOpen, onConfirm }: { cart: CartItem[]; total: number; onOpen: () => void; onConfirm: () => void }) {
+export function CartSummary({ cart, total, onOpen }: { cart: CartItem[]; total: number; onOpen: () => void }) {
   return (
     <View style={styles.panel}>
       <SectionTitle eyebrow="VENTA ACTUAL" title="Carrito" />
@@ -69,11 +68,8 @@ export function CartSummary({ cart, total, onOpen, onConfirm }: { cart: CartItem
           <Stat label="Productos" value={String(cart.reduce((sum, item) => sum + item.quantity, 0))} />
           <Stat label="Total" value={money(total)} />
           <View style={styles.inlineActions}>
-            <Pressable onPress={onOpen} style={styles.secondaryButton}>
-              <Text style={styles.secondaryText}>Ver pedido</Text>
-            </Pressable>
-            <Pressable onPress={onConfirm} style={styles.primaryButton}>
-              <Text style={styles.primaryText}>Confirmar</Text>
+            <Pressable onPress={onOpen} style={styles.primaryButton}>
+              <Text style={styles.primaryText}>Abrir carrito</Text>
             </Pressable>
           </View>
         </>
@@ -82,10 +78,19 @@ export function CartSummary({ cart, total, onOpen, onConfirm }: { cart: CartItem
   );
 }
 
-export function CartSheet({ cart, total, paymentMethod, simpleView, onPaymentMethod, safeBottom, onClose, onAdd, onRemoveOne, onRemove, onConfirm }: { cart: CartItem[]; total: number; paymentMethod: 'cash' | 'digital'; simpleView: boolean; onPaymentMethod: (method: 'cash' | 'digital') => void; safeBottom: number; onClose: () => void; onAdd: (product: Product) => void; onRemoveOne: (product: CartItem) => void; onRemove: (product: CartItem) => void; onConfirm: () => void }) {
+export function CartSheet({ cart, total, paymentMethod, simpleView, paymentConfig, onPaymentMethod, safeBottom, onClose, onAdd, onRemoveOne, onRemove, onConfirm }: { cart: CartItem[]; total: number; paymentMethod: 'cash' | 'digital'; simpleView: boolean; paymentConfig: { yapeEnabled: boolean; plinEnabled: boolean }; onPaymentMethod: (method: 'cash' | 'digital') => void; safeBottom: number; onClose: () => void; onAdd: (product: Product) => void; onRemoveOne: (product: CartItem) => void; onRemove: (product: CartItem) => void; onConfirm: () => void }) {
   const [qrExpanded, setQrExpanded] = useState(false);
+  useEffect(() => {
+    if (paymentMethod !== 'digital') {
+      setQrExpanded(false);
+      return;
+    }
+    const timer = setTimeout(() => setQrExpanded(true), 1000);
+    return () => clearTimeout(timer);
+  }, [paymentMethod]);
   return (
-    <Animated.View entering={FadeIn.duration(180)} style={[styles.sheet, { bottom: 96 + safeBottom }]}>
+    <>
+    <Animated.View style={[styles.sheet, { bottom: 96 + safeBottom }]}>
       <View style={styles.sheetHandle} />
       <View style={styles.sheetHeader}>
         <View style={styles.rowText}>
@@ -100,41 +105,36 @@ export function CartSheet({ cart, total, paymentMethod, simpleView, onPaymentMet
         {cart.map((item) => (
           <View key={String(item.id)} style={styles.cartRow}>
             <View style={styles.rowText}>
-              <Text style={styles.cartName}>{item.name}</Text>
-              {!simpleView ? <Text style={styles.muted}>{money(Number(item.price))} x {item.quantity} · {money(Number(item.price) * item.quantity)}</Text> : null}
-              {!simpleView ? <Pressable onPress={() => onRemove(item)}><Text style={styles.removeText}>Quitar producto</Text></Pressable> : null}
+              <Text style={styles.cartName} numberOfLines={2} ellipsizeMode="tail">{item.name}</Text>
+              <Text style={styles.muted}>Cantidad: {item.quantity}</Text>
             </View>
-            {simpleView ? <Text style={styles.simpleLineTotal}>{money(Number(item.price) * item.quantity)}</Text> : <>
-              <Pressable onPress={() => onRemoveOne(item)} style={({ pressed }) => [styles.stepper, pressed && styles.buttonPressed]}><Minus size={18} color="#174f42" /></Pressable>
-              <Text style={styles.qty}>{item.quantity}</Text>
-              <Pressable onPress={() => onAdd(item)} style={({ pressed }) => [styles.stepper, pressed && styles.buttonPressed]}><Plus size={18} color="#174f42" /></Pressable>
-            </>}
+            <Text style={styles.simpleLineTotal}>{money(Number(item.price) * item.quantity)}</Text>
+            <Pressable onPress={() => onRemoveOne(item)} style={({ pressed }) => [styles.stepper, styles.stepperMinus, pressed && styles.buttonPressed]}><Minus size={18} color="#a74035" /></Pressable>
+            <Text style={styles.qty}>{item.quantity}</Text>
+            <Pressable onPress={() => onAdd(item)} style={({ pressed }) => [styles.stepper, styles.stepperPlus, pressed && styles.buttonPressed]}><Plus size={18} color="#174f42" /></Pressable>
           </View>
         ))}
       </ScrollView>
       <View style={styles.paymentBox}>
         <Text style={styles.paymentLabel}>Medio de pago</Text>
         <View style={styles.segmented}>
-          <Pressable onPress={() => onPaymentMethod('cash')} style={({ pressed }) => [styles.segment, paymentMethod === 'cash' && styles.segmentActive, pressed && styles.buttonPressed]}>
+          <Pressable onPress={() => onPaymentMethod('cash')} style={({ pressed }) => [styles.segment, paymentMethod === 'cash' && [styles.segmentActive, styles.segmentCashActive], pressed && styles.buttonPressed]}>
             <WalletCards size={16} color={paymentMethod === 'cash' ? '#141a18' : '#6a716d'} />
             <Text style={[styles.segmentText, paymentMethod === 'cash' && styles.segmentTextActive]}>Efectivo</Text>
           </Pressable>
-          <Pressable onPress={() => onPaymentMethod('digital')} style={({ pressed }) => [styles.segment, paymentMethod === 'digital' && styles.segmentActive, pressed && styles.buttonPressed]}>
+          <Pressable disabled={!paymentConfig.yapeEnabled && !paymentConfig.plinEnabled} onPress={() => onPaymentMethod('digital')} style={({ pressed }) => [styles.segment, paymentMethod === 'digital' && [styles.segmentActive, styles.segmentDigitalActive], (!paymentConfig.yapeEnabled && !paymentConfig.plinEnabled) && styles.segmentDisabled, pressed && styles.buttonPressed]}>
             <WalletCards size={16} color={paymentMethod === 'digital' ? '#141a18' : '#6a716d'} />
             <Text style={[styles.segmentText, paymentMethod === 'digital' && styles.segmentTextActive]}>Yape / Plin</Text>
           </Pressable>
         </View>
         {paymentMethod === 'digital' ? (
           <View style={styles.digitalPayment}>
-            <Text style={styles.digitalTitle}>Escanea para pagar</Text>
-            <Pressable onPress={() => setQrExpanded((current) => !current)} style={[styles.paymentQrFrame, qrExpanded && styles.paymentQrFrameExpanded]}>
-              <Image source={require('../yape-qr.jpg')} style={[styles.paymentQrImage, qrExpanded && styles.paymentQrImageExpanded]} resizeMode="contain" />
-              <View style={styles.qrExpandBadge}>{qrExpanded ? <Minimize2 size={16} color="#174f42" /> : <Maximize2 size={16} color="#174f42" />}</View>
+            <Text style={styles.digitalTitle}>QR de Yape / Plin</Text>
+            <Pressable onPress={() => setQrExpanded(true)} style={styles.paymentQrFrame}>
+              <Image source={require('../yape-qr.jpg')} style={styles.paymentQrImage} resizeMode="contain" />
+              <View style={styles.qrExpandBadge}><Maximize2 size={16} color="#174f42" /></View>
             </Pressable>
-            <Text style={styles.qrHint}>{qrExpanded ? 'Toca para reducir' : 'Toca el QR para ampliar'}</Text>
-            {!simpleView ? (
-              <Text style={styles.muted}>Después de confirmar el pago, pulsa “Guardar venta pagada”.</Text>
-            ) : null}
+            <Text style={styles.qrHint}>Toca el QR para verlo grande · Total {money(total)}</Text>
           </View>
         ) : (
           <Text style={styles.muted}>Recibe {money(total)} y confirma para guardar la venta.</Text>
@@ -148,27 +148,63 @@ export function CartSheet({ cart, total, paymentMethod, simpleView, onPaymentMet
         <Text style={styles.primaryText}>{paymentMethod === 'digital' ? 'Guardar venta pagada' : 'Confirmar venta'}</Text>
       </Pressable>
     </Animated.View>
+    {qrExpanded ? (
+      <View style={styles.qrOverlay}>
+        <Pressable accessibilityLabel="Cerrar QR" onPress={() => setQrExpanded(false)} style={styles.qrOverlayDismiss} />
+        <View style={styles.qrModalCard}>
+          <View style={styles.qrModalHeader}>
+            <Text style={styles.qrModalTitle}>QR de Yape / Plin</Text>
+            <Pressable onPress={() => setQrExpanded(false)} style={styles.closeButton}>
+              <X size={20} color="#174f42" strokeWidth={2.5} />
+            </Pressable>
+          </View>
+          <Image source={require('../yape-qr.jpg')} style={styles.qrModalImage} resizeMode="contain" />
+          <Text style={styles.qrModalHint}>Escanéalo para pagar {money(total)}</Text>
+        </View>
+      </View>
+    ) : null}
+    </>
   );
 }
 
 // Tarjeta memoizada: al añadir un producto solo cambia el carrito, no se vuelve a
 // renderizar cada una de las tarjetas del catálogo (importante con catálogos grandes).
 export const ProductCard = memo(function ProductCard({ item, width, simpleView, highlighted, onPress }: { item: Product; width: DimensionValue; simpleView: boolean; highlighted?: boolean; onPress: (product: Product) => void }) {
-  const pulse = useSharedValue(0);
+  const pulse = useRef(new Animated.Value(1)).current;
+  const category = (item.category || 'Otros').toLowerCase();
+  const categoryStyle = category.includes('agua')
+    ? { background: '#dceafa', text: '#315b91', edge: '#78a9e3' }
+    : category.includes('gaseosa')
+      ? { background: '#f8ddd4', text: '#a34d3f', edge: '#e18a77' }
+      : category.includes('cerveza')
+        ? { background: '#fff0c7', text: '#926018', edge: '#e4b34f' }
+        : category.includes('licor')
+          ? { background: '#eadcf7', text: '#69408e', edge: '#a77bc8' }
+          : category.includes('snack')
+            ? { background: '#ffe0ad', text: '#995b0b', edge: '#e9a63a' }
+            : category.includes('abarrote')
+              ? { background: '#dff0d8', text: '#3c7440', edge: '#8fbd84' }
+              : category.includes('limpieza')
+                ? { background: '#d9f2f2', text: '#287071', edge: '#77bfc0' }
+                : category.includes('cuidado')
+                  ? { background: '#f4dff0', text: '#8a477b', edge: '#c98cbd' }
+                  : { background: '#e4f1ea', text: '#174f42', edge: '#91c2aa' };
+  const mark = item.name.trim().slice(0, 2).toUpperCase();
   useEffect(() => {
-    if (highlighted) pulse.value = withSequence(withTiming(1, { duration: 90 }), withTiming(0, { duration: 150 }));
+    if (highlighted) {
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.025, duration: 90, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 150, useNativeDriver: true }),
+      ]).start();
+    }
   }, [highlighted, pulse]);
-  const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pulse.value * 0.025 }] }));
   return (
-    <Animated.View style={[{ width }, pulseStyle]}>
-    <Pressable onPress={() => onPress(item)} style={({ pressed }) => [styles.productCard, highlighted && styles.productCardHighlighted, pressed && styles.productCardPressed, { width: '100%' }]}>
+    <Animated.View style={[{ width }, { transform: [{ scale: pulse }] }]}>
+    <Pressable onPress={() => onPress(item)} style={({ pressed }) => [styles.productCard, { borderLeftColor: categoryStyle.edge, borderLeftWidth: 4 }, highlighted && styles.productCardHighlighted, pressed && styles.productCardPressed, { width: '100%' }]}>
       <View style={styles.productCardTop}>
-        <View style={styles.productIcon}><Package size={20} color="#174f42" strokeWidth={2.2} /></View>
-        <Text style={styles.stockText}>{item.stock ?? 0} disponibles</Text>
+        <View style={[styles.productIcon, { backgroundColor: categoryStyle.background }]}><Text style={[styles.productMarkText, { color: categoryStyle.text }]}>{mark}</Text></View>
       </View>
       <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-      {!simpleView ? <Text style={styles.productDescription} numberOfLines={2}>{item.description || 'Producto de venta'}</Text> : null}
-      {!simpleView ? <Text style={styles.muted}>{item.category || 'General'}</Text> : null}
       <View style={styles.productFooter}>
         <Text style={styles.productPrice}>{money(Number(item.price))}</Text>
         <View style={styles.addBadge}><Plus size={20} color="#fff" strokeWidth={2.5} /></View>
@@ -216,9 +252,10 @@ export function SaleRow({ sale, onDelete }: { sale: OfflineSale; onDelete: () =>
   );
 }
 
-export function Kpi({ label, value, inverse }: { label: string; value: string; inverse?: boolean }) {
+export function Kpi({ label, value, inverse, tone }: { label: string; value: string; inverse?: boolean; tone?: 'green' | 'blue' | 'amber' }) {
+  const toneStyle = tone === 'green' ? styles.kpiToneGreen : tone === 'blue' ? styles.kpiToneBlue : tone === 'amber' ? styles.kpiToneAmber : null;
   return (
-    <View style={inverse ? styles.kpiInverse : styles.kpi}>
+    <View style={[inverse ? styles.kpiInverse : styles.kpi, toneStyle]}>
       <Text style={inverse ? styles.kpiLabelInverse : styles.kpiLabel}>{label}</Text>
       <Text style={inverse ? styles.kpiValueInverse : styles.kpiValue}>{value}</Text>
     </View>
@@ -271,23 +308,24 @@ export const styles = StyleSheet.create({
   shellWide: { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#e7ded3' },
   centerCard: { width: '92%', maxWidth: 420, alignSelf: 'center', marginTop: 90, backgroundColor: '#fffdfa', borderWidth: 1, borderColor: '#e6ddd2', borderRadius: 8, padding: 24, gap: 14 },
   setupLogo: { width: 96, height: 96, borderRadius: 48, alignSelf: 'center' },
-  header: { paddingHorizontal: 24, paddingTop: 42, paddingBottom: 14, flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' },
-  headerCompact: { paddingHorizontal: 16, paddingTop: 28, gap: 8 },
-  headerLogo: { width: 52, height: 52, borderRadius: 26, marginTop: 2 },
+  header: { paddingHorizontal: 24, paddingTop: 28, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' },
+  headerCompact: { paddingHorizontal: 16, paddingTop: 18, gap: 6 },
+  headerLogo: { width: 46, height: 46, borderRadius: 23, marginTop: 2 },
   userBlock: { flex: 1 },
   brand: { color: '#1b5b4e', fontSize: 12, fontWeight: '900', letterSpacing: 2 },
-  title: { color: '#141a18', fontSize: 32, fontWeight: '900', marginTop: 2 },
-  userText: { color: '#5f6b65', fontWeight: '800', marginTop: 5 },
+  title: { color: '#141a18', fontSize: 28, fontWeight: '900', marginTop: 2 },
+  userText: { color: '#5f6b65', fontWeight: '800', marginTop: 3 },
   setupTitle: { color: '#141a18', fontSize: 31, fontWeight: '900' },
   setupCopy: { color: '#6b746f', lineHeight: 21 },
   status: { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9 },
   statusOnline: { backgroundColor: '#e4f1ea' },
-  statusOffline: { backgroundColor: '#f5dfd8' },
-  statusText: { color: '#174f42', fontWeight: '900' },
-  globalSearch: { marginHorizontal: 24, marginBottom: 10, minHeight: 56, backgroundColor: '#fffdfa', borderRadius: 14, borderWidth: 1, borderColor: '#e1d8cc', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 10 },
+  statusOffline: { backgroundColor: '#fff0c9' },
+  statusText: { color: '#174f42', fontWeight: '900', textAlign: 'center' },
+  offlineHint: { marginHorizontal: 24, marginBottom: 4, color: '#7a5a16', fontWeight: '800', fontSize: 13 },
+  globalSearch: { marginHorizontal: 24, marginBottom: 8, minHeight: 48, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#c9d7cf', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 },
   globalSearchFocused: { borderColor: '#174f42', backgroundColor: '#ffffff' },
   globalSearchCompact: { marginHorizontal: 16 },
-  searchInput: { flex: 1, fontSize: 16, color: '#151a18', minHeight: 54, outlineWidth: 0 },
+  searchInput: { flex: 1, fontSize: 15, color: '#151a18', minHeight: 46, outlineWidth: 0 },
   clearButton: { paddingHorizontal: 14, alignSelf: 'stretch', justifyContent: 'center' },
   clearText: { color: '#174f42', fontWeight: '900' },
   searchPanel: { marginHorizontal: 24, marginBottom: 10, backgroundColor: '#fffdfa', borderRadius: 8, borderWidth: 1, borderColor: '#e6ddd2', overflow: 'hidden' },
@@ -296,7 +334,7 @@ export const styles = StyleSheet.create({
   resultIconText: { color: '#174f42', fontWeight: '900' },
   resultType: { width: 64, color: '#174f42', fontWeight: '900', fontSize: 11 },
   resultTitle: { color: '#141a18', fontWeight: '900', fontSize: 15 },
-  content: { paddingHorizontal: 24, paddingBottom: 104, gap: 14 },
+  content: { paddingHorizontal: 24, paddingBottom: 104, gap: 10 },
   contentCompact: { paddingHorizontal: 16, paddingBottom: 112 },
   connectionHint: { color: '#8a6a36', fontWeight: '800', marginTop: -5 },
   grid: { gap: 14 },
@@ -313,17 +351,18 @@ export const styles = StyleSheet.create({
   chipText: { color: '#5e6762', fontWeight: '800' },
   chipTextActive: { color: '#fff' },
   productGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  productCard: { backgroundColor: '#fffdfa', borderColor: '#e5ddd3', borderWidth: 1, borderRadius: 16, padding: 14, minHeight: 168, gap: 5 },
+  productCard: { backgroundColor: '#fffdfa', borderColor: '#e5ddd3', borderWidth: 1, borderRadius: 14, padding: 11, minHeight: 104, gap: 4 },
   productCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 3 },
-  productIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#e4f1ea', alignItems: 'center', justifyContent: 'center' },
+  productIcon: { width: 38, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  productMarkText: { fontSize: 14, fontWeight: '900', letterSpacing: 0.5 },
   productCardPressed: { borderColor: '#174f42', backgroundColor: '#f1f7f3', transform: [{ scale: 0.985 }] },
   productCardHighlighted: { borderColor: '#5baf84', borderWidth: 2 },
-  productName: { color: '#141a18', fontSize: 16, fontWeight: '900' },
+  productName: { color: '#141a18', fontSize: 15, fontWeight: '900' },
   productDescription: { color: '#4d5853', marginTop: 8, lineHeight: 19 },
   stockText: { color: '#7b6659', fontWeight: '800', marginTop: 6, fontSize: 12 },
   productFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', gap: 8 },
-  productPrice: { color: '#174f42', fontSize: 20, fontWeight: '900' },
-  addBadge: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#174f42', alignItems: 'center', justifyContent: 'center' },
+  productPrice: { color: '#174f42', fontSize: 19, fontWeight: '900' },
+  addBadge: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#174f42', alignItems: 'center', justifyContent: 'center' },
   addBadgeText: { color: '#fff', fontSize: 22, fontWeight: '500', lineHeight: 24 },
   panel: { backgroundColor: '#fffdfa', borderRadius: 8, borderWidth: 1, borderColor: '#e6ddd2', padding: 16, gap: 12 },
   panelLarge: { backgroundColor: '#fffdfa', borderRadius: 8, borderWidth: 1, borderColor: '#e6ddd2', padding: 18, gap: 14 },
@@ -346,37 +385,48 @@ export const styles = StyleSheet.create({
   cartFab: { position: 'absolute', left: 24, right: 24, bottom: 78, maxWidth: 560, alignSelf: 'center', backgroundColor: '#174f42', borderRadius: 16, padding: 16, flexDirection: 'row', justifyContent: 'space-between' },
   cartFabText: { color: '#fff', fontWeight: '900' },
   cartFabTotal: { color: '#fff', fontWeight: '900', fontSize: 18 },
-  sheet: { position: 'absolute', left: 12, right: 12, bottom: 78, maxWidth: 620, maxHeight: '86%', alignSelf: 'center', backgroundColor: '#fffdfa', borderRadius: 24, padding: 20, gap: 10, borderWidth: 1, borderColor: '#e5ddd3', zIndex: 12 },
+  sheetBackdrop: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(20,26,24,0.42)', zIndex: 11 },
+  sheet: { position: 'absolute', left: 12, right: 12, bottom: 78, maxWidth: 620, maxHeight: '72%', alignSelf: 'center', backgroundColor: '#fffdfa', borderRadius: 24, padding: 16, gap: 8, borderWidth: 1, borderColor: '#e5ddd3', zIndex: 12, elevation: 12 },
   sheetHandle: { width: 72, height: 6, borderRadius: 6, backgroundColor: '#d8d4ce', alignSelf: 'center' },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sheetTitle: { color: '#141a18', fontSize: 31, fontWeight: '900' },
+  sheetTitle: { color: '#141a18', fontSize: 26, fontWeight: '900' },
   closeButton: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#edf0ec', alignItems: 'center', justifyContent: 'center' },
   closeText: { color: '#174f42', fontSize: 22, fontWeight: '900' },
-  sheetItems: { maxHeight: 180 },
-  cartRow: { borderTopColor: '#e7dfd4', borderTopWidth: 1, paddingVertical: 13, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  sheetItems: { maxHeight: 132 },
+  cartRow: { borderTopColor: '#e7dfd4', borderTopWidth: 1, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowText: { flex: 1 },
   cartName: { color: '#141a18', fontSize: 15, fontWeight: '900' },
   removeText: { color: '#a74035', fontWeight: '900', marginTop: 8 },
-  stepper: { width: 42, height: 42, borderRadius: 8, borderWidth: 1, borderColor: '#e3dacf', alignItems: 'center', justifyContent: 'center' },
+  stepper: { width: 42, height: 42, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  stepperMinus: { backgroundColor: '#fde8e5', borderColor: '#e2b2aa' },
+  stepperPlus: { backgroundColor: '#e4f1ea', borderColor: '#a7cfb8' },
   stepperText: { color: '#174f42', fontSize: 22, fontWeight: '900' },
-  qty: { minWidth: 22, textAlign: 'center', color: '#141a18', fontSize: 19, fontWeight: '900' },
-  simpleLineTotal: { color: '#174f42', fontSize: 16, fontWeight: '900' },
-  paymentBox: { backgroundColor: '#f1f2ed', borderRadius: 8, padding: 16, gap: 12 },
+  qty: { minWidth: 34, textAlign: 'center', color: '#315b91', backgroundColor: '#e8eef8', borderRadius: 8, paddingVertical: 8, fontSize: 19, fontWeight: '900' },
+  simpleLineTotal: { color: '#315b91', fontSize: 16, fontWeight: '900' },
+  paymentBox: { backgroundColor: '#f1f2ed', borderRadius: 8, padding: 12, gap: 8 },
   paymentLabel: { color: '#141a18', fontWeight: '900' },
   segmented: { minHeight: 54, borderRadius: 12, backgroundColor: '#e2e4dd', flexDirection: 'row', padding: 5, gap: 5 },
   segmentActive: { flex: 1, backgroundColor: '#fff', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  segmentCashActive: { backgroundColor: '#fff0c9', borderColor: '#e5c978', borderWidth: 1 },
+  segmentDigitalActive: { backgroundColor: '#e8eef8', borderColor: '#b9c9e3', borderWidth: 1 },
   segment: { flex: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
   segmentText: { color: '#6a716d', fontWeight: '900' },
   segmentTextActive: { color: '#141a18' },
-  digitalPayment: { alignItems: 'center', gap: 8, paddingVertical: 6 },
+  segmentDisabled: { opacity: 0.45 },
+  digitalPayment: { alignItems: 'center', gap: 4, paddingVertical: 2 },
   digitalTitle: { color: '#174f42', fontWeight: '900', fontSize: 16 },
-  paymentQrFrame: { width: 190, height: 150, borderRadius: 10, backgroundColor: '#fff', overflow: 'hidden', alignItems: 'center' },
-  paymentQrImage: { width: 190, height: 338, transform: [{ translateY: -130 }] },
-  paymentQrFrameExpanded: { width: 280, height: 280, borderRadius: 18 },
-  paymentQrImageExpanded: { width: 260, height: 260, transform: [{ translateY: 0 }] },
+  paymentQrFrame: { width: 150, height: 150, borderRadius: 12, backgroundColor: '#fff', overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  paymentQrImage: { width: 138, height: 138 },
   qrExpandBadge: { position: 'absolute', right: 8, bottom: 8, width: 30, height: 30, borderRadius: 15, backgroundColor: '#e4f1ea', alignItems: 'center', justifyContent: 'center' },
   qrHint: { color: '#174f42', fontSize: 12, fontWeight: '800' },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  qrOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 40, alignItems: 'center', justifyContent: 'center' },
+  qrOverlayDismiss: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(20,26,24,0.82)' },
+  qrModalCard: { width: '88%', maxWidth: 440, backgroundColor: '#fffdfa', borderRadius: 22, padding: 16, alignItems: 'center', gap: 10, elevation: 18 },
+  qrModalHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  qrModalTitle: { color: '#141a18', fontSize: 22, fontWeight: '900' },
+  qrModalImage: { width: '100%', height: 340, backgroundColor: '#fff' },
+  qrModalHint: { color: '#174f42', fontWeight: '900', fontSize: 16, textAlign: 'center' },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: '#fff0c9' },
   totalLabel: { color: '#141a18', fontSize: 20, fontWeight: '900' },
   totalValue: { color: '#141a18', fontSize: 32, fontWeight: '900' },
   bottomNav: { position: 'absolute', left: 14, right: 14, bottom: 0, height: 72, paddingHorizontal: 8, paddingTop: 7, backgroundColor: 'rgba(255,253,250,0.97)', borderColor: '#ded8cf', borderWidth: 1, borderRadius: 28, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
@@ -391,7 +441,7 @@ export const styles = StyleSheet.create({
   scannerCamera: { width: '100%', height: 300, borderRadius: 14, overflow: 'hidden' },
   navActive: { color: '#174f42' },
   buttonPressed: { opacity: 0.78, transform: [{ scale: 0.985 }] },
-  summaryCard: { backgroundColor: '#174f42', borderRadius: 8, padding: 18, flexDirection: 'row', gap: 12, justifyContent: 'space-between', flexWrap: 'wrap' },
+  summaryCard: { backgroundColor: '#f6f1ea', borderRadius: 14, flexDirection: 'row', gap: 10, justifyContent: 'space-between', flexWrap: 'wrap' },
   historyRow: { backgroundColor: '#fffdfa', borderRadius: 8, padding: 16, borderColor: '#e5ddd3', borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 14 },
   historyRight: { alignItems: 'flex-end', gap: 3 },
   deleteSaleButton: { marginTop: 7, borderRadius: 6, borderWidth: 1, borderColor: '#bd6a60', paddingHorizontal: 9, paddingVertical: 5 },
@@ -404,6 +454,9 @@ export const styles = StyleSheet.create({
   good: { color: '#141a18' },
   warn: { color: '#a74035' },
   kpi: { backgroundColor: '#fffdfa', borderRadius: 8, borderWidth: 1, borderColor: '#e5ddd3', padding: 16 },
+  kpiToneGreen: { backgroundColor: '#e4f1ea', borderColor: '#a7cfb8' },
+  kpiToneBlue: { backgroundColor: '#e8eef8', borderColor: '#b9c9e3' },
+  kpiToneAmber: { backgroundColor: '#fff0c9', borderColor: '#e5c978' },
   kpiInverse: { minWidth: 120, flex: 1 },
   kpiLabel: { color: '#6a716d', fontWeight: '800' },
   kpiLabelInverse: { color: '#bfd0ca', fontWeight: '800' },

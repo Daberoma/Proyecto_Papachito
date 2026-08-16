@@ -1,16 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, useWindowDimensions, type DimensionValue } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, AppState, useWindowDimensions, type DimensionValue } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { useCameraPermissions } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getSales,getApiBase,getApiBases,getCatalog,getSeller,getSimpleView,queueSale,removeSale,setSeller,setApiBase,setSimpleView as persistSimpleView,setCatalog,discoverApiBase,detectApiBase,syncPendingSales,type OfflineSale } from './offline';
+import { getSales,getApiBase,getApiBases,getCatalog,getSeller,getSimpleView,getPaymentConfig,queueSale,removeSale,setSeller,setApiBase,setSimpleView as persistSimpleView,setPaymentConfig,setCatalog,discoverApiBase,detectApiBase,syncPendingSales,type OfflineSale,type PaymentConfig } from './offline';
 import { API,actions,apiCandidates,classifyProduct,fallbackProducts,money,saleTime,type CartItem,type Product,type RemoteReport,type ReportPeriod,type Screen,type SearchResult } from './domain';
 
 export function usePapachitoApp() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isWide = width >= 760;
-  const isNarrow = width < 380;
+  // En teléfonos reales de 360–430dp, dos columnas dejan nombres y precios
+  // demasiado apretados. Una columna mejora lectura y precisión táctil;
+  // tablets y pantallas anchas conservan la cuadrícula.
+  const isNarrow = width < 430;
   const productCardWidth: DimensionValue = isWide ? '31.8%' : isNarrow ? '100%' : '48.5%';
 
   const [booting, setBooting] = useState(true);
@@ -44,6 +47,13 @@ export function usePapachitoApp() {
   const [simpleView, setSimpleViewState] = useState(false);
   const [savedApiBases, setSavedApiBases] = useState<string[]>([]);
   const [addedProductPulse, setAddedProductPulse] = useState('');
+  const [paymentConfig, setPaymentConfigState] = useState<PaymentConfig>({ yapeEnabled: true, plinEnabled: false });
+  const mountedRef = useRef(true);
+  const catalogLoadingRef = useRef(false);
+  const lastCatalogLoadAtRef = useRef(0);
+  const syncLoadingRef = useRef(false);
+  const lastSyncAtRef = useRef(0);
+  const wasOnlineRef = useRef<boolean | null>(null);
 
   const pendingCount = sales.filter((sale) => sale.status !== 'synced').length;
   const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0), [cart]);
@@ -92,8 +102,12 @@ export function usePapachitoApp() {
     return [...productResults, ...saleResults, ...actionResults].slice(0, 8);
   }, [products, sales, searchText]);
 
-  const todaySales = sales.filter((sale) => new Date(sale.createdAt).toDateString() === new Date().toDateString());
-  const todayTotal = todaySales.reduce((sum, sale) => sum + sale.total, 0);
+  const visibleSales = useMemo(() => filteredSales.slice().reverse(), [filteredSales]);
+  const todaySales = useMemo(() => {
+    const today = new Date().toDateString();
+    return sales.filter((sale) => new Date(sale.createdAt).toDateString() === today);
+  }, [sales]);
+  const todayTotal = useMemo(() => todaySales.reduce((sum, sale) => sum + sale.total, 0), [todaySales]);
   const reportTotal = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
   const reportDays = useMemo(() => {
     const rows: { date: string; label: string; total: number }[] = [];
@@ -136,8 +150,21 @@ export function usePapachitoApp() {
       { label: 'Yape / Plin', total: digital },
     ];
   }, [filteredSales, remoteReport]);
+  const sellerBreakdown = useMemo(() => {
+    if (remoteReport?.sellers?.length) return remoteReport.sellers;
+    const map = new Map<string, { label: string; count: number; total: number }>();
+    filteredSales.filter((sale) => sale.status !== 'error').forEach((sale) => {
+      const label = sale.seller?.trim() || 'Sin nombre';
+      const current = map.get(label) || { label, count: 0, total: 0 };
+      current.count += 1;
+      current.total += Number(sale.total || 0);
+      map.set(label, current);
+    });
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [filteredSales, remoteReport]);
   const maxProductTotal = Math.max(1, ...topProducts.map((item) => item.total));
   const maxPaymentTotal = Math.max(1, ...paymentBreakdown.map((item) => item.total));
+  const maxSellerTotal = Math.max(1, ...sellerBreakdown.map((item) => item.total));
   const reportSummary = remoteReport?.summary || { count: filteredSales.length, total: reportTotal, average: filteredSales.length ? reportTotal / filteredSales.length : 0 };
   const reportSeries = remoteReport?.series?.length ? remoteReport.series : reportDays.map((day) => ({ date: day.date, count: 0, total: day.total }));
   const reportMax = Math.max(1, ...reportSeries.map((item) => Number(item.total)));
@@ -191,13 +218,25 @@ export function usePapachitoApp() {
   }, [refreshSales]);
 
   const loadCatalog = useCallback(async (preferredBase?: string) => {
-    setLoadingCatalog(true);
+    if (catalogLoadingRef.current) return;
+    catalogLoadingRef.current = true;
     const cached = await getCatalog<Product[]>();
-    if (cached.length) setProducts(cached);
-    try {
-      const net = await NetInfo.fetch();
-      const ipAddress = (net.details as any)?.ipAddress as string | undefined;
+    const hasCachedCatalog = cached.length > 0;
+    // La pantalla de venta debe abrirse desde la caché. La red se verifica en
+    // segundo plano para evitar una pausa al volver desde Ajustes.
+    if (hasCachedCatalog) {
+      setProducts(cached);
+      setLoadingCatalog(false);
+      setSearchingServer(false);
+      if (!preferredBase && Date.now() - lastCatalogLoadAtRef.current < 5 * 60 * 1000) {
+        catalogLoadingRef.current = false;
+        return;
+      }
+    } else {
+      setLoadingCatalog(true);
       setSearchingServer(true);
+    }
+    try {
       // Se prueba primero el servidor indicado por QR o el último guardado.
       // Así el cambio de Wi‑Fi no obliga a esperar todo el barrido de la red.
       const storedBase = await getApiBase();
@@ -208,7 +247,9 @@ export function usePapachitoApp() {
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
           const controller = new AbortController();
-          timer = setTimeout(() => controller.abort(), 1400);
+          // En Android el primer fetch puede tardar más por la negociación
+          // de red; la caché ya está visible y este timeout no bloquea Vender.
+          timer = setTimeout(() => controller.abort(), 3000);
           response = await fetch(`${base}/api/catalogo`, { signal: controller.signal });
           if (!response.ok) response = null;
         } catch {
@@ -220,40 +261,67 @@ export function usePapachitoApp() {
         }
       }
       if (!response) {
-        base = await discoverApiBase([preferredBase || '', storedBase, ...apiCandidates], ipAddress);
-        response = await fetch(`${base}/api/catalogo`);
+        // No escanear automáticamente 254 IPs en cada arranque. El teléfono
+        // puede estar offline y la app debe seguir funcionando con la caché.
+        base = await discoverApiBase([preferredBase || '', storedBase, ...apiCandidates]);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 3000);
+        try {
+          response = await fetch(`${base}/api/catalogo`, { signal: controller.signal });
+        } finally {
+          clearTimeout(timer);
+        }
       }
       await setApiBase(base);
+      if (!mountedRef.current) return;
       setApiBaseState(base);
       setSavedApiBases(await getApiBases());
       const payload = await response.json();
       if (!response.ok || !payload.ok) throw new Error(payload.message || 'No se pudo cargar el catálogo');
       const catalog = payload.products?.length ? payload.products : fallbackProducts;
       const normalized = catalog.map((product: Product) => ({ ...product, category: classifyProduct(product) }));
+      if (!mountedRef.current) return;
       setProducts(normalized);
       await setCatalog(normalized);
+      lastCatalogLoadAtRef.current = Date.now();
       setOnline(true);
     } catch {
+      if (!mountedRef.current) return;
       setOnline(false);
       setProducts((current) => (current.length ? current : fallbackProducts));
     } finally {
-      setSearchingServer(false);
-      setLoadingCatalog(false);
+      catalogLoadingRef.current = false;
+      if (mountedRef.current) {
+        setSearchingServer(false);
+        setLoadingCatalog(false);
+      }
     }
   }, []);
 
   const syncNow = useCallback(async () => {
+    if (syncLoadingRef.current) return;
+    syncLoadingRef.current = true;
     try {
-      const base = await detectApiBase(apiCandidates);
+      const localSales = await getSales();
+      const hasPending = localSales.some((sale) => sale.status !== 'synced');
+      if (!hasPending) {
+        lastSyncAtRef.current = Date.now();
+        return;
+      }
+      const saved = await getApiBase();
+      const base = saved || await detectApiBase(apiCandidates, 700);
       setApiBaseState(base);
       setSavedApiBases(await getApiBases());
       const result = await syncPendingSales(base);
+      lastSyncAtRef.current = Date.now();
       setOnline(result.online);
       if (result.synced > 0) setLastSyncAt(new Date().toISOString());
       await refreshSales();
     } catch {
       setOnline(false);
       await refreshSales();
+    } finally {
+      syncLoadingRef.current = false;
     }
   }, [refreshSales]);
 
@@ -310,38 +378,74 @@ export function usePapachitoApp() {
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
+    let cancelled = false;
+
+    // Arranque local-first: ninguna petición de red puede bloquear la primera
+    // pantalla. Todo lo necesario para vender offline se lee en paralelo.
     (async () => {
-      const storedName = (await getSeller()).trim();
-      if (storedName) {
-        setSellerName(storedName);
-        setSettingsName(storedName);
+      const [storedName, storedApi, savedBases, localSimpleView, localPaymentConfig, cached, localSales] = await Promise.all([
+        getSeller(),
+        getApiBase(),
+        getApiBases(),
+        getSimpleView(),
+        getPaymentConfig(),
+        getCatalog<Product[]>(),
+        getSales(),
+      ]);
+      if (cancelled || !mountedRef.current) return;
+      const name = storedName.trim();
+      if (name) {
+        setSellerName(name);
+        setSettingsName(name);
         setHasProfile(true);
       }
-      const storedApi = await getApiBase();
       if (storedApi) setApiBaseState(storedApi);
-      setSavedApiBases(await getApiBases());
-      setSimpleViewState(await getSimpleView());
-      const cached = await getCatalog<Product[]>();
+      setSavedApiBases(savedBases);
+      setSimpleViewState(localSimpleView);
+      setPaymentConfigState(localPaymentConfig);
       if (cached.length) setProducts(cached);
-      await refreshSales();
-      await loadCatalog();
+      setSales(localSales);
       setBooting(false);
-      // La interfaz y el catálogo en caché quedan disponibles de inmediato.
-      // La sincronización de pendientes continúa en segundo plano y no bloquea el arranque.
-      void syncNow();
+
+      // La red empieza después de que React pinte la interfaz.
+      // Dejar que React pinte la primera pantalla antes de iniciar la red,
+      // sin usar InteractionManager, que está obsoleto en RN actual.
+      setTimeout(() => {
+        if (!cancelled && mountedRef.current) {
+          void loadCatalog();
+          void syncNow();
+        }
+      }, 0);
     })();
+
     const unsubscribe = NetInfo.addEventListener((state) => {
-      if (state.isConnected) {
-        loadCatalog();
-        syncNow();
-      } else {
-        setOnline(false);
+      const connected = state.isConnected === true;
+      const wasOnline = wasOnlineRef.current;
+      wasOnlineRef.current = connected;
+      if (!connected) {
+        if (mountedRef.current) setOnline(false);
+        return;
+      }
+      // Solo refrescar al recuperar conexión, no por cada evento repetido.
+      if (wasOnline === false || wasOnline === null) {
+        void loadCatalog();
+        void syncNow();
       }
     });
-    const timer = setInterval(syncNow, 15000);
+
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && Date.now() - lastSyncAtRef.current > 60000) {
+        void loadCatalog();
+        void syncNow();
+      }
+    });
+
     return () => {
+      cancelled = true;
+      mountedRef.current = false;
       unsubscribe();
-      clearInterval(timer);
+      appStateSubscription.remove();
     };
   }, [loadCatalog, refreshSales, syncNow]);
 
@@ -392,7 +496,6 @@ export function usePapachitoApp() {
       if (!found) return [...current, { ...product, quantity: 1 }];
       return current.map((item) => (String(item.id) === String(product.id) ? { ...item, quantity: item.quantity + 1 } : item));
     });
-    setCartOpen(true);
   }, []);
 
   const removeOne = (product: CartItem) => {
@@ -487,6 +590,14 @@ export function usePapachitoApp() {
     await persistSimpleView(value);
   }, []);
 
+  const togglePaymentMethod = useCallback(async (method: 'yapeEnabled' | 'plinEnabled', value: boolean) => {
+    setPaymentConfigState((current) => {
+      const next = { ...current, [method]: value };
+      void setPaymentConfig(next);
+      return next;
+    });
+  }, []);
 
-  return { insets,isWide,isNarrow,productCardWidth,booting,hasProfile,setupName,sellerName,settingsName,screen,products,cart,sales,online,apiBase,loadingCatalog,search,category,quickName,quickPrice,newProductName,newProductPrice,newProductCategory,cartOpen,paymentMethod,reportPeriod,remoteReport,reportLoading,scannerOpen,searchingServer,lastSyncAt,simpleView,savedApiBases,addedProductPulse,pendingCount,cartTotal,categories,searchText,filteredProducts,filteredSales,searchResults,todaySales,todayTotal,reportTotal,reportDays,maxReport,bestDay,topProducts,paymentBreakdown,maxProductTotal,maxPaymentTotal,reportSummary,reportSeries,reportMax,cameraPermission,requestCameraPermission,setSetupName,setSellerName,setSettingsName,setScreen,setProducts,setCart,setSales,setOnline,setApiBaseState,setLoadingCatalog,setSearch,setCategory,setQuickName,setQuickPrice,setNewProductName,setNewProductPrice,setNewProductCategory,setCartOpen,setPaymentMethod,setReportPeriod,setRemoteReport,setReportLoading,setScannerOpen,setSearchingServer,setLastSyncAt,toggleSimpleView,navigateTo,refreshSales,cancelSale,loadCatalog,syncNow,openScanner,connectFromQr,loadReport,continueSetup,saveSettingsName,saveServer,addProduct,removeOne,removeProduct,addQuickProduct,createProduct,confirmSale,selectSearchResult };
+
+  return { insets,isWide,isNarrow,productCardWidth,booting,hasProfile,setupName,sellerName,settingsName,screen,products,cart,sales,online,apiBase,loadingCatalog,search,category,quickName,quickPrice,newProductName,newProductPrice,newProductCategory,cartOpen,paymentMethod,reportPeriod,remoteReport,reportLoading,scannerOpen,searchingServer,lastSyncAt,simpleView,paymentConfig,savedApiBases,addedProductPulse,pendingCount,cartTotal,categories,searchText,filteredProducts,filteredSales,visibleSales,searchResults,todaySales,todayTotal,reportTotal,reportDays,maxReport,bestDay,topProducts,paymentBreakdown,sellerBreakdown,maxProductTotal,maxPaymentTotal,maxSellerTotal,reportSummary,reportSeries,reportMax,cameraPermission,requestCameraPermission,setSetupName,setSellerName,setSettingsName,setScreen,setProducts,setCart,setSales,setOnline,setApiBaseState,setLoadingCatalog,setSearch,setCategory,setQuickName,setQuickPrice,setNewProductName,setNewProductPrice,setNewProductCategory,setCartOpen,setPaymentMethod,setReportPeriod,setRemoteReport,setReportLoading,setScannerOpen,setSearchingServer,setLastSyncAt,toggleSimpleView,togglePaymentMethod,navigateTo,refreshSales,cancelSale,loadCatalog,syncNow,openScanner,connectFromQr,loadReport,continueSetup,saveSettingsName,saveServer,addProduct,removeOne,removeProduct,addQuickProduct,createProduct,confirmSale,selectSearchResult };
 }
