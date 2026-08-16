@@ -409,6 +409,7 @@ export const styles = StyleSheet.create({
   addBadge: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#174f42', alignItems: 'center', justifyContent: 'center' },
   addBadgeText: { color: '#fff', fontSize: 22, fontWeight: '500', lineHeight: 24 },
   panel: { backgroundColor: '#fffdfa', borderRadius: 8, borderWidth: 1, borderColor: '#e6ddd2', padding: 16, gap: 12 },
+  updateNotice: { backgroundColor: '#eef7f1', borderRadius: 10, borderWidth: 1, borderColor: '#b8d8c2', padding: 12, gap: 8 },
   panelLarge: { backgroundColor: '#fffdfa', borderRadius: 8, borderWidth: 1, borderColor: '#e6ddd2', padding: 18, gap: 14 },
   periodTabs: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   periodTab: { borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#ebe5dc' },

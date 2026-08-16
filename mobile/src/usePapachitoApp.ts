@@ -5,6 +5,7 @@ import { useCameraPermissions } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getSales,getApiBase,getApiBases,getCatalog,getSeller,getSimpleView,getPaymentConfig,queueSale,removeSale,setSeller,setApiBase,setSimpleView as persistSimpleView,setPaymentConfig,setCatalog,discoverApiBase,detectApiBase,syncPendingSales,type OfflineSale,type PaymentConfig } from './offline';
 import { API,actions,apiCandidates,classifyProduct,fallbackProducts,money,saleTime,type CartItem,type Product,type RemoteReport,type ReportPeriod,type Screen,type SearchResult } from './domain';
+import { checkGithubApkUpdate, downloadAndOpenGithubApk, installedVersion, installedVersionCode, type GithubApkUpdate } from './githubApkUpdate';
 
 export function usePapachitoApp() {
   const { width } = useWindowDimensions();
@@ -48,6 +49,9 @@ export function usePapachitoApp() {
   const [savedApiBases, setSavedApiBases] = useState<string[]>([]);
   const [addedProductPulse, setAddedProductPulse] = useState('');
   const [paymentConfig, setPaymentConfigState] = useState<PaymentConfig>({ yapeEnabled: true, plinEnabled: false });
+  const [availableUpdate, setAvailableUpdate] = useState<GithubApkUpdate | null>(null);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateInstalling, setUpdateInstalling] = useState(false);
   const mountedRef = useRef(true);
   const catalogLoadingRef = useRef(false);
   const lastCatalogLoadAtRef = useRef(0);
@@ -493,6 +497,31 @@ export function usePapachitoApp() {
     await refreshSales(value);
   };
 
+  const checkForUpdate = useCallback(async () => {
+    setUpdateChecking(true);
+    try {
+      const update = await checkGithubApkUpdate();
+      setAvailableUpdate(update);
+      if (!update) Alert.alert('Sin novedades', `Ya tienes la versión ${installedVersion}.`);
+    } catch (error: any) {
+      Alert.alert('No se pudo revisar', error?.message || 'Revisa tu conexión e inténtalo nuevamente.');
+    } finally {
+      setUpdateChecking(false);
+    }
+  }, []);
+
+  const installUpdate = useCallback(async () => {
+    if (!availableUpdate) return;
+    setUpdateInstalling(true);
+    try {
+      await downloadAndOpenGithubApk(availableUpdate);
+    } catch (error: any) {
+      Alert.alert('No se pudo abrir el instalador', error?.message || 'Descarga nuevamente la versión.');
+    } finally {
+      setUpdateInstalling(false);
+    }
+  }, [availableUpdate]);
+
   const addProduct = useCallback((product: Product) => {
     setAddedProductPulse(`${String(product.id)}-${Date.now()}`);
     setCart((current) => {
@@ -607,5 +636,5 @@ export function usePapachitoApp() {
   }, []);
 
 
-  return { insets,isWide,isNarrow,productCardWidth,booting,hasProfile,setupName,sellerName,settingsName,screen,products,cart,sales,online,apiBase,loadingCatalog,search,category,quickName,quickPrice,newProductName,newProductPrice,newProductCategory,cartOpen,paymentMethod,reportPeriod,remoteReport,reportLoading,scannerOpen,searchingServer,lastSyncAt,simpleView,paymentConfig,savedApiBases,addedProductPulse,pendingCount,cartTotal,categories,searchText,filteredProducts,filteredSales,visibleSales,searchResults,todaySales,todayTotal,reportTotal,reportDays,maxReport,bestDay,topProducts,paymentBreakdown,sellerBreakdown,maxProductTotal,maxPaymentTotal,maxSellerTotal,reportSummary,reportSeries,reportMax,cameraPermission,requestCameraPermission,setSetupName,setSellerName,setSettingsName,setScreen,setProducts,setCart,setSales,setOnline,setApiBaseState,setLoadingCatalog,setSearch,setCategory,setQuickName,setQuickPrice,setNewProductName,setNewProductPrice,setNewProductCategory,setCartOpen,setPaymentMethod,setReportPeriod,setRemoteReport,setReportLoading,setScannerOpen,setSearchingServer,setLastSyncAt,toggleSimpleView,togglePaymentMethod,navigateTo,refreshSales,cancelSale,loadCatalog,syncNow,openScanner,connectFromQr,loadReport,continueSetup,saveSettingsName,saveServer,addProduct,removeOne,removeProduct,addQuickProduct,createProduct,confirmSale,selectSearchResult };
+  return { insets,isWide,isNarrow,productCardWidth,booting,hasProfile,setupName,sellerName,settingsName,screen,products,cart,sales,online,apiBase,loadingCatalog,search,category,quickName,quickPrice,newProductName,newProductPrice,newProductCategory,cartOpen,paymentMethod,reportPeriod,remoteReport,reportLoading,scannerOpen,searchingServer,lastSyncAt,simpleView,paymentConfig,savedApiBases,addedProductPulse,availableUpdate,updateChecking,updateInstalling,installedVersion,installedVersionCode,pendingCount,cartTotal,categories,searchText,filteredProducts,filteredSales,visibleSales,searchResults,todaySales,todayTotal,reportTotal,reportDays,maxReport,bestDay,topProducts,paymentBreakdown,sellerBreakdown,maxProductTotal,maxPaymentTotal,maxSellerTotal,reportSummary,reportSeries,reportMax,cameraPermission,requestCameraPermission,setSetupName,setSellerName,setSettingsName,setScreen,setProducts,setCart,setSales,setOnline,setApiBaseState,setLoadingCatalog,setSearch,setCategory,setQuickName,setQuickPrice,setNewProductName,setNewProductPrice,setNewProductCategory,setCartOpen,setPaymentMethod,setReportPeriod,setRemoteReport,setReportLoading,setScannerOpen,setSearchingServer,setLastSyncAt,toggleSimpleView,togglePaymentMethod,navigateTo,refreshSales,cancelSale,loadCatalog,syncNow,openScanner,connectFromQr,loadReport,continueSetup,saveSettingsName,saveServer,checkForUpdate,installUpdate,addProduct,removeOne,removeProduct,addQuickProduct,createProduct,confirmSale,selectSearchResult };
 }

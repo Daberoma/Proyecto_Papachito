@@ -2,11 +2,12 @@
   "expo": {
     "name": "Donde Papachito",
     "slug": "donde-papachito",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "scheme": "papachito",
     "orientation": "default",
     "icon": "./icon.png",
     "android": {
+      "versionCode": 2,
       "icon": "./icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./icon.png",
@@ -18,7 +19,8 @@
         "ACCESS_NETWORK_STATE",
         "ACCESS_WIFI_STATE",
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.REQUEST_INSTALL_PACKAGES"
       ]
     },
     "plugins": [
