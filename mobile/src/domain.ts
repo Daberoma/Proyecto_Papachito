@@ -29,6 +29,7 @@ export type RemoteReport = {
   historical: { count: number; total: number; firstDate?: string; lastDate?: string };
   topProducts?: { name: string; quantity: number; total: number }[];
   payments?: { label: string; total: number }[];
+  sellers?: { label: string; count: number; total: number }[];
 };
 
 export const hostFromExpo = Constants.expoConfig?.hostUri?.split(':')[0];

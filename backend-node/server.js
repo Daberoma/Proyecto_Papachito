@@ -195,6 +195,13 @@ app.get('/api/reportes', async (req, res) => {
      WHERE s.status='completed' AND s.sale_date BETWEEN $1 AND $2
      GROUP BY pm.name ORDER BY total DESC`, [from, to],
   );
+  const sellers = await pool.query(
+    `SELECT COALESCE(NULLIF(s.original_payload->>'seller',''), NULLIF(s.customer_name,''), 'Sin nombre') AS label,
+            COUNT(*)::int AS count, COALESCE(SUM(s.total),0)::float AS total
+     FROM sales s
+     WHERE s.status='completed' AND s.sale_date BETWEEN $1 AND $2
+     GROUP BY 1 ORDER BY total DESC LIMIT 10`, [from, to],
+  );
   const s = summary.rows[0];
   const h = historical.rows[0];
   res.json({
@@ -207,6 +214,7 @@ app.get('/api/reportes', async (req, res) => {
     historical: { count: h.count, total: h.total, firstDate: h.first_date, lastDate: h.last_date },
     topProducts: topProducts.rows,
     payments: payments.rows,
+    sellers: sellers.rows,
   });
 });
 
