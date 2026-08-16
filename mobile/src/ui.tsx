@@ -28,6 +28,7 @@ import type { LucideIcon } from 'lucide-react-native';
 import {
   money,
   saleTime,
+  shortDate,
   type CartItem,
   type Product,
   type Screen,
@@ -38,19 +39,20 @@ export function screenTitle(screen: Screen) {
   if (screen === 'history') return 'Historial';
   if (screen === 'report') return 'Reporte';
   if (screen === 'settings') return 'Ajustes';
+  if (screen === 'payments') return 'Medios de pago';
   return 'Nueva venta';
 }
 
-export function SectionTitle({ eyebrow, title, right, onRight }: { eyebrow: string; title: string; right?: string; onRight?: () => void }) {
+export function SectionTitle({ eyebrow, title, right, onRight, compact }: { eyebrow: string; title: string; right?: string; onRight?: () => void; compact?: boolean }) {
   return (
-    <View style={styles.sectionHeading}>
+    <View style={[styles.sectionHeading, compact && styles.sectionHeadingCompact]}>
       <View style={styles.rowText}>
-        <Text style={styles.eyebrow}>{eyebrow}</Text>
-        <Text style={styles.sectionTitle}>{title}</Text>
+        <Text style={[styles.eyebrow, compact && styles.eyebrowCompact]}>{eyebrow}</Text>
+        <Text style={[styles.sectionTitle, compact && styles.sectionTitleCompact]}>{title}</Text>
       </View>
       {right ? (
         <Pressable onPress={onRight} disabled={!onRight}>
-          <Text style={styles.sectionRight}>{right}</Text>
+          <Text style={[styles.sectionRight, compact && styles.sectionRightCompact]}>{right}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -78,8 +80,15 @@ export function CartSummary({ cart, total, onOpen }: { cart: CartItem[]; total: 
   );
 }
 
-export function CartSheet({ cart, total, paymentMethod, simpleView, paymentConfig, onPaymentMethod, safeBottom, onClose, onAdd, onRemoveOne, onRemove, onConfirm }: { cart: CartItem[]; total: number; paymentMethod: 'cash' | 'digital'; simpleView: boolean; paymentConfig: { yapeEnabled: boolean; plinEnabled: boolean }; onPaymentMethod: (method: 'cash' | 'digital') => void; safeBottom: number; onClose: () => void; onAdd: (product: Product) => void; onRemoveOne: (product: CartItem) => void; onRemove: (product: CartItem) => void; onConfirm: () => void }) {
+export function CartSheet({ cart, total, paymentMethod, simpleView, paymentConfig, onPaymentMethod, safeBottom, onClose, onAdd, onRemoveOne, onRemove, onConfirm }: { cart: CartItem[]; total: number; paymentMethod: 'cash' | 'digital'; simpleView: boolean; paymentConfig: { yapeEnabled: boolean; plinEnabled: boolean; bbvaEnabled: boolean; yapeQrUri?: string; plinQrUri?: string; bbvaQrUri?: string }; onPaymentMethod: (method: 'cash' | 'digital') => void; safeBottom: number; onClose: () => void; onAdd: (product: Product) => void; onRemoveOne: (product: CartItem) => void; onRemove: (product: CartItem) => void; onConfirm: () => void }) {
   const [qrExpanded, setQrExpanded] = useState(false);
+  const [digitalProvider, setDigitalProvider] = useState<'yape' | 'plin' | 'bbva'>('yape');
+  const digitalOptions = [
+    { key: 'yape' as const, label: 'Yape', enabled: paymentConfig.yapeEnabled, uri: paymentConfig.yapeQrUri },
+    { key: 'plin' as const, label: 'Plin', enabled: paymentConfig.plinEnabled, uri: paymentConfig.plinQrUri },
+    { key: 'bbva' as const, label: 'BBVA', enabled: paymentConfig.bbvaEnabled, uri: paymentConfig.bbvaQrUri },
+  ];
+  const activeDigital = digitalOptions.find((item) => item.key === digitalProvider && item.enabled) || digitalOptions.find((item) => item.enabled) || digitalOptions[0];
   useEffect(() => {
     if (paymentMethod !== 'digital') {
       setQrExpanded(false);
@@ -88,6 +97,12 @@ export function CartSheet({ cart, total, paymentMethod, simpleView, paymentConfi
     const timer = setTimeout(() => setQrExpanded(true), 1000);
     return () => clearTimeout(timer);
   }, [paymentMethod]);
+  useEffect(() => {
+    if (!digitalOptions.find((item) => item.key === digitalProvider && item.enabled)) {
+      const next = digitalOptions.find((item) => item.enabled);
+      if (next) setDigitalProvider(next.key);
+    }
+  }, [paymentConfig.yapeEnabled, paymentConfig.plinEnabled, paymentConfig.bbvaEnabled, digitalProvider]);
   return (
     <>
     <Animated.View style={[styles.sheet, { bottom: 96 + safeBottom }]}>
@@ -122,16 +137,23 @@ export function CartSheet({ cart, total, paymentMethod, simpleView, paymentConfi
             <WalletCards size={16} color={paymentMethod === 'cash' ? '#141a18' : '#6a716d'} />
             <Text style={[styles.segmentText, paymentMethod === 'cash' && styles.segmentTextActive]}>Efectivo</Text>
           </Pressable>
-          <Pressable disabled={!paymentConfig.yapeEnabled && !paymentConfig.plinEnabled} onPress={() => onPaymentMethod('digital')} style={({ pressed }) => [styles.segment, paymentMethod === 'digital' && [styles.segmentActive, styles.segmentDigitalActive], (!paymentConfig.yapeEnabled && !paymentConfig.plinEnabled) && styles.segmentDisabled, pressed && styles.buttonPressed]}>
+          <Pressable disabled={!paymentConfig.yapeEnabled && !paymentConfig.plinEnabled && !paymentConfig.bbvaEnabled} onPress={() => onPaymentMethod('digital')} style={({ pressed }) => [styles.segment, paymentMethod === 'digital' && [styles.segmentActive, styles.segmentDigitalActive], (!paymentConfig.yapeEnabled && !paymentConfig.plinEnabled && !paymentConfig.bbvaEnabled) && styles.segmentDisabled, pressed && styles.buttonPressed]}>
             <WalletCards size={16} color={paymentMethod === 'digital' ? '#141a18' : '#6a716d'} />
-            <Text style={[styles.segmentText, paymentMethod === 'digital' && styles.segmentTextActive]}>Yape / Plin</Text>
+            <Text style={[styles.segmentText, paymentMethod === 'digital' && styles.segmentTextActive]}>Digital</Text>
           </Pressable>
         </View>
         {paymentMethod === 'digital' ? (
           <View style={styles.digitalPayment}>
-            <Text style={styles.digitalTitle}>QR de Yape / Plin</Text>
+            <View style={styles.digitalChoices}>
+              {digitalOptions.filter((item) => item.enabled).map((item) => (
+                <Pressable key={item.key} onPress={() => setDigitalProvider(item.key)} style={({ pressed }) => [styles.digitalChoice, digitalProvider === item.key && styles.digitalChoiceActive, pressed && styles.buttonPressed]}>
+                  <Text style={[styles.digitalChoiceText, digitalProvider === item.key && styles.digitalChoiceTextActive]}>{item.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.digitalTitle}>QR de {activeDigital.label}</Text>
             <Pressable onPress={() => setQrExpanded(true)} style={styles.paymentQrFrame}>
-              <Image source={require('../yape-qr.jpg')} style={styles.paymentQrImage} resizeMode="contain" />
+              {activeDigital.uri ? <Image source={{ uri: activeDigital.uri }} style={styles.paymentQrImage} resizeMode="contain" /> : activeDigital.key === 'yape' ? <Image source={require('../yape-qr.jpg')} style={styles.paymentQrImage} resizeMode="contain" /> : <Text style={styles.qrMissingText}>Sube el QR de {activeDigital.label} en Ajustes</Text>}
               <View style={styles.qrExpandBadge}><Maximize2 size={16} color="#174f42" /></View>
             </Pressable>
             <Text style={styles.qrHint}>Toca el QR para verlo grande · Total {money(total)}</Text>
@@ -153,12 +175,12 @@ export function CartSheet({ cart, total, paymentMethod, simpleView, paymentConfi
         <Pressable accessibilityLabel="Cerrar QR" onPress={() => setQrExpanded(false)} style={styles.qrOverlayDismiss} />
         <View style={styles.qrModalCard}>
           <View style={styles.qrModalHeader}>
-            <Text style={styles.qrModalTitle}>QR de Yape / Plin</Text>
+            <Text style={styles.qrModalTitle}>QR de {activeDigital.label}</Text>
             <Pressable onPress={() => setQrExpanded(false)} style={styles.closeButton}>
               <X size={20} color="#174f42" strokeWidth={2.5} />
             </Pressable>
           </View>
-          <Image source={require('../yape-qr.jpg')} style={styles.qrModalImage} resizeMode="contain" />
+          {activeDigital.uri ? <Image source={{ uri: activeDigital.uri }} style={styles.qrModalImage} resizeMode="contain" /> : activeDigital.key === 'yape' ? <Image source={require('../yape-qr.jpg')} style={styles.qrModalImage} resizeMode="contain" /> : <Text style={styles.qrMissingText}>Sin QR configurado</Text>}
           <Text style={styles.qrModalHint}>Escanéalo para pagar {money(total)}</Text>
         </View>
       </View>
@@ -201,14 +223,12 @@ export const ProductCard = memo(function ProductCard({ item, width, simpleView, 
   return (
     <Animated.View style={[{ width }, { transform: [{ scale: pulse }] }]}>
     <Pressable onPress={() => onPress(item)} style={({ pressed }) => [styles.productCard, { borderLeftColor: categoryStyle.edge, borderLeftWidth: 4 }, highlighted && styles.productCardHighlighted, pressed && styles.productCardPressed, { width: '100%' }]}>
-      <View style={styles.productCardTop}>
-        <View style={[styles.productIcon, { backgroundColor: categoryStyle.background }]}><Text style={[styles.productMarkText, { color: categoryStyle.text }]}>{mark}</Text></View>
-      </View>
-      <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-      <View style={styles.productFooter}>
+      <View style={[styles.productIcon, { backgroundColor: categoryStyle.background }]}><Text style={[styles.productMarkText, { color: categoryStyle.text }]}>{mark}</Text></View>
+      <View style={styles.productMain}>
+        <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
         <Text style={styles.productPrice}>{money(Number(item.price))}</Text>
-        <View style={styles.addBadge}><Plus size={20} color="#fff" strokeWidth={2.5} /></View>
       </View>
+      <View style={styles.addBadge}><Plus size={20} color="#fff" strokeWidth={2.5} /></View>
     </Pressable>
     </Animated.View>
   );
@@ -259,17 +279,22 @@ export function DesktopNav({ screen, setScreen, sellerName, online }: { screen: 
   );
 }
 
-export function SaleRow({ sale, onDelete }: { sale: OfflineSale; onDelete: () => void }) {
+export function SaleRow({ sale, onDelete, onPress }: { sale: OfflineSale; onDelete: () => void; onPress?: () => void }) {
   return (
     <View style={styles.historyRow}>
-      <View style={styles.badge}><Text style={styles.badgeText}>B</Text></View>
-      <View style={styles.rowText}>
-        <Text style={styles.historyTitle}>{sale.status === 'synced' ? 'Boleta sincronizada' : 'Boleta pendiente'}</Text>
-        <Text style={styles.muted}>{saleTime(sale.createdAt)} · {sale.seller} · {sale.items.length} productos</Text>
-      </View>
-      <View style={styles.historyRight}>
-        <Text style={styles.historyTotal}>{money(sale.total)}</Text>
-        <Text style={[styles.historyStatus, sale.status === 'synced' ? styles.good : styles.warn]}>{sale.status === 'synced' ? 'SINCRONIZADA' : 'PENDIENTE'}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Abrir boleta del ${shortDate(sale.createdAt)}`} onPress={onPress} style={({ pressed }) => [styles.historyTop, pressed && styles.buttonPressed]}>
+        <View style={styles.badge}><Text style={styles.badgeText}>B</Text></View>
+        <View style={styles.rowText}>
+          <Text style={styles.historyTitle} numberOfLines={1}>{sale.items[0]?.name || 'Venta sin productos'}{sale.items.length > 1 ? ` + ${sale.items.length - 1} más` : ''}</Text>
+          <Text style={styles.muted}>{saleTime(sale.createdAt)} · {sale.seller}</Text>
+        </View>
+        <View style={styles.historyRight}>
+          <Text style={styles.historyTotal}>{money(sale.total)}</Text>
+          <Text style={[styles.historyStatus, sale.status === 'synced' ? styles.good : styles.warn]}>{sale.status === 'synced' ? 'ENVIADA' : 'PENDIENTE DE ENVÍO'}</Text>
+        </View>
+      </Pressable>
+      <View style={styles.historyBottom}>
+        <Text style={styles.muted}>{sale.items.length} {sale.items.length === 1 ? 'producto' : 'productos'}</Text>
         <Pressable onPress={onDelete} style={styles.deleteSaleButton}>
           <Text style={styles.deleteSaleText}>Eliminar</Text>
         </Pressable>
@@ -278,12 +303,12 @@ export function SaleRow({ sale, onDelete }: { sale: OfflineSale; onDelete: () =>
   );
 }
 
-export function Kpi({ label, value, inverse, tone }: { label: string; value: string; inverse?: boolean; tone?: 'green' | 'blue' | 'amber' }) {
+export function Kpi({ label, value, inverse, tone, compact }: { label: string; value: string; inverse?: boolean; tone?: 'green' | 'blue' | 'amber'; compact?: boolean }) {
   const toneStyle = tone === 'green' ? styles.kpiToneGreen : tone === 'blue' ? styles.kpiToneBlue : tone === 'amber' ? styles.kpiToneAmber : null;
   return (
-    <View style={[inverse ? styles.kpiInverse : styles.kpi, toneStyle]}>
+    <View style={[inverse ? styles.kpiInverse : styles.kpi, toneStyle, compact && styles.kpiMobile]}>
       <Text style={inverse ? styles.kpiLabelInverse : styles.kpiLabel}>{label}</Text>
-      <Text style={inverse ? styles.kpiValueInverse : styles.kpiValue}>{value}</Text>
+      <Text style={[inverse ? styles.kpiValueInverse : styles.kpiValue, compact && styles.kpiValueMobile]}>{value}</Text>
     </View>
   );
 }
@@ -366,18 +391,36 @@ export const styles = StyleSheet.create({
   statusOffline: { backgroundColor: '#fff0c9' },
   statusText: { color: '#174f42', fontWeight: '900', textAlign: 'center' },
   offlineHint: { marginHorizontal: 24, marginBottom: 4, color: '#7a5a16', fontWeight: '800', fontSize: 13 },
-  globalSearch: { marginHorizontal: 24, marginBottom: 8, minHeight: 48, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#c9d7cf', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 },
+  searchArea: { position: 'relative', zIndex: 25 },
+  searchBackdrop: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(20,26,24,0.16)', zIndex: 20 },
+  globalSearch: { marginHorizontal: 24, marginBottom: 8, minHeight: 56, backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#c9d7cf', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 9 },
   globalSearchFocused: { borderColor: '#174f42', backgroundColor: '#ffffff' },
   globalSearchCompact: { marginHorizontal: 16 },
-  searchInput: { flex: 1, fontSize: 15, color: '#151a18', minHeight: 46, outlineWidth: 0 },
-  clearButton: { paddingHorizontal: 14, alignSelf: 'stretch', justifyContent: 'center' },
+  searchInput: { flex: 1, fontSize: 17, color: '#151a18', minHeight: 52, outlineWidth: 0 },
+  clearButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#e4f1ea', alignItems: 'center', justifyContent: 'center' },
   clearText: { color: '#174f42', fontWeight: '900' },
-  searchPanel: { marginHorizontal: 24, marginBottom: 10, backgroundColor: '#fffdfa', borderRadius: 8, borderWidth: 1, borderColor: '#e6ddd2', overflow: 'hidden' },
-  resultRow: { padding: 13, borderBottomWidth: 1, borderBottomColor: '#eee7de', flexDirection: 'row', gap: 10, alignItems: 'center' },
-  resultIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#e4f1ea', alignItems: 'center', justifyContent: 'center' },
+  searchPanel: { position: 'absolute', top: 62, left: 24, right: 24, backgroundColor: '#fffdfa', borderRadius: 16, borderWidth: 1, borderColor: '#ded8cf', overflow: 'hidden', zIndex: 30, elevation: 10, shadowColor: '#17211d', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  searchPanelCompact: { left: 16, right: 16 },
+  searchPanelHeader: { paddingHorizontal: 15, paddingTop: 13, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f7f4ee' },
+  searchPanelEyebrow: { color: '#1b5b4e', fontSize: 10, fontWeight: '900', letterSpacing: 1.7 },
+  searchPanelTitle: { color: '#141a18', fontSize: 15, fontWeight: '900', marginTop: 3 },
+  searchPanelCount: { minWidth: 28, height: 28, borderRadius: 14, backgroundColor: '#e4f1ea', color: '#174f42', fontSize: 13, fontWeight: '900', textAlign: 'center', paddingTop: 5 },
+  resultRow: { minHeight: 64, paddingHorizontal: 12, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#eee7de', flexDirection: 'row', gap: 10, alignItems: 'center' },
+  resultRowPressed: { backgroundColor: '#f1f7f3' },
+  resultIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#e4f1ea', alignItems: 'center', justifyContent: 'center' },
+  resultIconSale: { backgroundColor: '#e8eef8' },
   resultIconText: { color: '#174f42', fontWeight: '900' },
-  resultType: { width: 64, color: '#174f42', fontWeight: '900', fontSize: 11 },
+  resultCopy: { flex: 1, minWidth: 0 },
   resultTitle: { color: '#141a18', fontWeight: '900', fontSize: 15 },
+  resultSubtitle: { color: '#6b746f', fontSize: 12, fontWeight: '700', marginTop: 3 },
+  resultTag: { borderRadius: 8, backgroundColor: '#e4f1ea', paddingHorizontal: 8, paddingVertical: 5 },
+  resultTagSale: { backgroundColor: '#e8eef8' },
+  resultTagText: { color: '#174f42', fontSize: 10, fontWeight: '900' },
+  resultTagTextSale: { color: '#315b91' },
+  searchEmpty: { minHeight: 70, paddingHorizontal: 15, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  searchEmptyCopy: { flex: 1 },
+  searchEmptyTitle: { color: '#141a18', fontWeight: '900', fontSize: 14 },
+  searchEmptyText: { color: '#6b746f', fontSize: 12, marginTop: 3 },
   content: { paddingHorizontal: 24, paddingBottom: 104, gap: 10 },
   contentCompact: { paddingHorizontal: 16, paddingBottom: 112 },
   connectionHint: { color: '#8a6a36', fontWeight: '800', marginTop: -5 },
@@ -386,42 +429,93 @@ export const styles = StyleSheet.create({
   mainColumn: { flex: 1, gap: 14 },
   sideColumn: { width: '100%', gap: 14, maxWidth: 340 },
   sectionHeading: { marginTop: 2, marginBottom: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 },
+  sectionHeadingCompact: { marginBottom: 0, gap: 8 },
   eyebrow: { color: '#1b5b4e', fontSize: 12, fontWeight: '900', letterSpacing: 2 },
+  eyebrowCompact: { fontSize: 10, letterSpacing: 1.5 },
   sectionTitle: { color: '#141a18', fontSize: 24, fontWeight: '900' },
+  sectionTitleCompact: { fontSize: 21, lineHeight: 25 },
   sectionRight: { color: '#174f42', fontWeight: '900', fontSize: 15 },
+  sectionRightCompact: { fontSize: 13 },
   chips: { gap: 8, paddingVertical: 2 },
   chip: { borderRadius: 8, backgroundColor: '#ebe5dc', paddingHorizontal: 15, paddingVertical: 10 },
   chipActive: { backgroundColor: '#174f42' },
   chipText: { color: '#5e6762', fontWeight: '800' },
   chipTextActive: { color: '#fff' },
   productGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  productCard: { backgroundColor: '#fffdfa', borderColor: '#e5ddd3', borderWidth: 1, borderRadius: 14, padding: 11, minHeight: 104, gap: 4 },
-  productCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 3 },
-  productIcon: { width: 38, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  productCard: { backgroundColor: '#fffdfa', borderColor: '#e5ddd3', borderWidth: 1, borderRadius: 16, padding: 12, minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  productIcon: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   productMarkText: { fontSize: 14, fontWeight: '900', letterSpacing: 0.5 },
   productCardPressed: { borderColor: '#174f42', backgroundColor: '#f1f7f3', transform: [{ scale: 0.985 }] },
   productCardHighlighted: { borderColor: '#5baf84', borderWidth: 2 },
-  productName: { color: '#141a18', fontSize: 15, fontWeight: '900' },
+  productMain: { flex: 1, minWidth: 0, gap: 5 },
+  productName: { color: '#141a18', fontSize: 16, lineHeight: 20, fontWeight: '900' },
   productDescription: { color: '#4d5853', marginTop: 8, lineHeight: 19 },
   stockText: { color: '#7b6659', fontWeight: '800', marginTop: 6, fontSize: 12 },
   productFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', gap: 8 },
-  productPrice: { color: '#174f42', fontSize: 19, fontWeight: '900' },
-  addBadge: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#174f42', alignItems: 'center', justifyContent: 'center' },
+  productPrice: { color: '#174f42', fontSize: 18, fontWeight: '900' },
+  addBadge: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#174f42', alignItems: 'center', justifyContent: 'center' },
   addBadgeText: { color: '#fff', fontSize: 22, fontWeight: '500', lineHeight: 24 },
   panel: { backgroundColor: '#fffdfa', borderRadius: 8, borderWidth: 1, borderColor: '#e6ddd2', padding: 16, gap: 12 },
   updateNotice: { backgroundColor: '#eef7f1', borderRadius: 10, borderWidth: 1, borderColor: '#b8d8c2', padding: 12, gap: 8 },
   panelLarge: { backgroundColor: '#fffdfa', borderRadius: 8, borderWidth: 1, borderColor: '#e6ddd2', padding: 18, gap: 14 },
+  panelLargeMobile: { padding: 14, gap: 10, borderRadius: 12 },
   periodTabs: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   periodTab: { borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#ebe5dc' },
   periodTabActive: { backgroundColor: '#174f42' },
   periodTabText: { color: '#5e6762', fontWeight: '900' },
   periodTabTextActive: { color: '#fff' },
+  calendarPanel: { backgroundColor: '#fffdfa', borderRadius: 12, borderWidth: 1, borderColor: '#e6ddd2', padding: 14, gap: 10 },
+  calendarHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  calendarTitle: { color: '#141a18', fontSize: 18, fontWeight: '900', textTransform: 'capitalize', marginTop: 3 },
+  calendarNav: { flexDirection: 'row', gap: 6 },
+  calendarNavButton: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#e4f1ea', alignItems: 'center', justifyContent: 'center' },
+  calendarWeekRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 2 },
+  calendarWeekDay: { width: '14.28%', textAlign: 'center', color: '#8a918c', fontSize: 11, fontWeight: '900' },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 4 },
+  calendarCell: { width: '14.28%', height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 10, gap: 2 },
+  calendarCellMarked: { backgroundColor: '#e4f1ea' },
+  calendarCellActive: { backgroundColor: '#fff0c9' },
+  calendarCellBusy: { backgroundColor: '#d9e8fb' },
+  calendarDayText: { color: '#5e6762', fontWeight: '800' },
+  calendarDayTextMarked: { color: '#174f42', fontWeight: '900' },
+  calendarDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#1b6b58' },
+  calendarHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  calendarHint: { color: '#6a716d', fontSize: 12, fontWeight: '700' },
+  dayModalOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 30, alignItems: 'center', justifyContent: 'center', padding: 16 },
+  dayModalDismiss: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(20,26,24,0.58)' },
+  dayModalCard: { width: '100%', maxWidth: 560, maxHeight: '76%', backgroundColor: '#fffdfa', borderRadius: 20, padding: 16, gap: 12, zIndex: 31, elevation: 16 },
+  dayModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  dayModalTitle: { color: '#141a18', fontSize: 23, fontWeight: '900', marginTop: 3, textTransform: 'capitalize' },
+  daySalesList: { maxHeight: 330 },
+  daySaleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: '#eee7dc', paddingVertical: 11 },
+  daySaleTitle: { color: '#141a18', fontWeight: '900' },
+  daySaleTotal: { color: '#174f42', fontSize: 16, fontWeight: '900' },
+  saleDetailMeta: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  saleDetailMetaText: { color: '#174f42', backgroundColor: '#e4f1ea', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, fontWeight: '900' },
+  saleDetailItems: { maxHeight: 330 },
+  saleDetailRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: '#eee7dc', paddingVertical: 12 },
+  saleDetailName: { color: '#141a18', fontWeight: '900' },
+  dayModalTotal: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff0c9', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  dayModalTotalLabel: { color: '#141a18', fontWeight: '900' },
+  dayModalTotalValue: { color: '#141a18', fontSize: 20, fontWeight: '900' },
   historicalRow: { flexDirection: 'row', gap: 28, flexWrap: 'wrap' },
   preferenceRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  paymentSettingsCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f1f7f3', borderRadius: 12, borderWidth: 1, borderColor: '#cfe2d5', padding: 14 },
+  paymentMethodCard: { backgroundColor: '#fffdfa', borderRadius: 14, borderWidth: 1, borderColor: '#e5ddd3', borderLeftWidth: 5, padding: 14, gap: 14 },
+  paymentMethodHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  paymentMethodTitle: { color: '#141a18', fontSize: 17, fontWeight: '900' },
+  qrUploadRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  qrPreviewSmall: { width: 86, height: 86, borderRadius: 12, borderWidth: 1, borderColor: '#d9e1db', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  qrPreviewImage: { width: 80, height: 80 },
+  qrPreviewText: { color: '#6a716d', fontWeight: '900' },
+  uploadButton: { paddingVertical: 10, marginTop: 8 },
+  backLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 4 },
+  backLinkText: { color: '#174f42', fontWeight: '900' },
   preferenceTitle: { color: '#141a18', fontWeight: '900', fontSize: 16 },
   savedServer: { borderRadius: 10, borderWidth: 1, borderColor: '#d9e6de', backgroundColor: '#f1f7f3', paddingHorizontal: 12, paddingVertical: 10 },
   savedServerText: { color: '#174f42', fontSize: 13, fontWeight: '800' },
   input: { backgroundColor: '#fffdfa', borderColor: '#d9d3c9', borderWidth: 1, borderRadius: 12, minHeight: 54, paddingHorizontal: 15, fontSize: 16, color: '#151a18' },
+  inputLocked: { backgroundColor: '#f0eee9', color: '#6a716d' },
   primaryButton: { backgroundColor: '#174f42', borderRadius: 8, padding: 15, alignItems: 'center', justifyContent: 'center' },
   primaryText: { color: '#fff', fontWeight: '900', fontSize: 16 },
   secondaryButton: { borderRadius: 8, borderColor: '#174f42', borderWidth: 1, padding: 14, alignItems: 'center', justifyContent: 'center' },
@@ -462,6 +556,12 @@ export const styles = StyleSheet.create({
   digitalTitle: { color: '#174f42', fontWeight: '900', fontSize: 16 },
   paymentQrFrame: { width: 150, height: 150, borderRadius: 12, backgroundColor: '#fff', overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   paymentQrImage: { width: 138, height: 138 },
+  qrMissingText: { color: '#6a716d', fontWeight: '800', textAlign: 'center', paddingHorizontal: 18 },
+  digitalChoices: { flexDirection: 'row', gap: 6, width: '100%' },
+  digitalChoice: { flex: 1, minHeight: 36, borderRadius: 8, backgroundColor: '#edf0ec', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  digitalChoiceActive: { backgroundColor: '#e4f1ea', borderWidth: 1, borderColor: '#9ac9ae' },
+  digitalChoiceText: { color: '#6a716d', fontWeight: '900', fontSize: 12 },
+  digitalChoiceTextActive: { color: '#174f42' },
   qrExpandBadge: { position: 'absolute', right: 8, bottom: 8, width: 30, height: 30, borderRadius: 15, backgroundColor: '#e4f1ea', alignItems: 'center', justifyContent: 'center' },
   qrHint: { color: '#174f42', fontSize: 12, fontWeight: '800' },
   qrOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 40, alignItems: 'center', justifyContent: 'center' },
@@ -487,7 +587,18 @@ export const styles = StyleSheet.create({
   navActive: { color: '#174f42' },
   buttonPressed: { opacity: 0.78, transform: [{ scale: 0.985 }] },
   summaryCard: { backgroundColor: '#f6f1ea', borderRadius: 14, flexDirection: 'row', gap: 10, justifyContent: 'space-between', flexWrap: 'wrap' },
-  historyRow: { backgroundColor: '#fffdfa', borderRadius: 8, padding: 16, borderColor: '#e5ddd3', borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  reportSummaryScroll: { gap: 8, paddingRight: 8 },
+  reportKpiSlot: { width: 150 },
+  historyRow: { backgroundColor: '#fffdfa', borderRadius: 12, padding: 14, borderColor: '#e5ddd3', borderWidth: 1, gap: 10 },
+  historySections: { gap: 18 },
+  historySection: { gap: 8 },
+  historyMoreButton: { backgroundColor: '#e4f1ea', borderColor: '#a7cfb8', borderWidth: 1, borderRadius: 12, padding: 15, alignItems: 'center' },
+  historyMoreText: { color: '#174f42', fontWeight: '900' },
+  historyModalCard: { width: '100%', maxWidth: 620, maxHeight: '82%', backgroundColor: '#fffdfa', borderRadius: 20, padding: 16, gap: 12, zIndex: 31, elevation: 16 },
+  historyModalList: { maxHeight: 600 },
+  historyModalItem: { marginBottom: 10 },
+  historyTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  historyBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 66, minHeight: 28 },
   historyRight: { alignItems: 'flex-end', gap: 3 },
   deleteSaleButton: { marginTop: 7, borderRadius: 6, borderWidth: 1, borderColor: '#bd6a60', paddingHorizontal: 9, paddingVertical: 5 },
   deleteSaleText: { color: '#a74035', fontWeight: '900', fontSize: 12 },
@@ -502,11 +613,13 @@ export const styles = StyleSheet.create({
   kpiToneGreen: { backgroundColor: '#e4f1ea', borderColor: '#a7cfb8' },
   kpiToneBlue: { backgroundColor: '#e8eef8', borderColor: '#b9c9e3' },
   kpiToneAmber: { backgroundColor: '#fff0c9', borderColor: '#e5c978' },
-  kpiInverse: { minWidth: 120, flex: 1 },
+  kpiInverse: { minWidth: 120, flex: 1, backgroundColor: '#174f42', borderRadius: 12, padding: 14 },
+  kpiMobile: { minWidth: 0, padding: 12, borderRadius: 12 },
   kpiLabel: { color: '#6a716d', fontWeight: '800' },
   kpiLabelInverse: { color: '#bfd0ca', fontWeight: '800' },
   kpiValue: { color: '#141a18', fontWeight: '900', fontSize: 28, marginTop: 4 },
   kpiValueInverse: { color: '#fff', fontWeight: '900', fontSize: 28, marginTop: 4 },
+  kpiValueMobile: { fontSize: 22, marginTop: 2 },
   reportHero: { backgroundColor: '#fffdfa', borderRadius: 8, borderWidth: 1, borderColor: '#e6ddd2', padding: 18, gap: 14, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   reportHeroText: { flex: 1, minWidth: 220 },
   reportHeroTitle: { color: '#141a18', fontSize: 24, fontWeight: '900', marginTop: 4 },
@@ -516,12 +629,13 @@ export const styles = StyleSheet.create({
   reportHeroBadgeValue: { color: '#fff', fontSize: 24, fontWeight: '900', marginTop: 6 },
   reportHeroBadgeTotal: { color: '#fff', fontWeight: '900', marginTop: 4 },
   chart: { height: 170, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8, marginTop: 10 },
-  chartLarge: { height: 210, minWidth: '100%', flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8, marginTop: 8 },
+  chartLarge: { height: 178, minWidth: '100%', flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 6, marginTop: 4, paddingTop: 6 },
   chartLargeWide: { minWidth: 760 },
-  chartCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
-  chartBar: { width: '68%', backgroundColor: '#174f42', borderRadius: 8 },
-  chartValue: { color: '#141a18', fontSize: 11, fontWeight: '900', marginBottom: 6 },
-  chartLabel: { color: '#6a716d', fontSize: 11, marginTop: 7, fontWeight: '800' },
+  chartCol: { flex: 1, minWidth: 34, height: '100%', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
+  chartBarTrack: { width: 22, height: 128, justifyContent: 'flex-end', backgroundColor: '#edf1ed', borderRadius: 11, overflow: 'hidden' },
+  chartBar: { width: '100%', minHeight: 5, backgroundColor: '#1b6b58', borderRadius: 11 },
+  chartValue: { color: '#5f6964', fontSize: 10, fontWeight: '900', maxWidth: 48, height: 16 },
+  chartLabel: { color: '#6a716d', fontSize: 10, marginTop: 2, fontWeight: '800', maxWidth: 46, textAlign: 'center' },
   rankRow: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#eee7dc' },
   rankIndex: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#e6f0eb', color: '#174f42', textAlign: 'center', paddingTop: 5, fontWeight: '900' },
   rankBody: { flex: 1, gap: 8 },

@@ -14,7 +14,7 @@ export type Product = {
 };
 
 export type CartItem = Product & { quantity: number };
-export type Screen = 'sale' | 'history' | 'report' | 'settings';
+export type Screen = 'sale' | 'history' | 'report' | 'settings' | 'payments';
 export type SearchResult =
   | { type: 'product'; title: string; subtitle: string; product: Product }
   | { type: 'sale'; title: string; subtitle: string; sale: OfflineSale }
@@ -71,9 +71,17 @@ export const classifyProduct = (product: Product): string => {
 };
 export const saleTime = (iso: string) => new Date(iso).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
 export const shortDate = (iso: string) => new Date(iso).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' });
-export const reportPeriodLabel = (period: ReportPeriod) => ({ dia: 'Últimos 7 días', mes: 'Este mes', ano: 'Este año', historico: 'Todo el histórico' }[period]);
+export const reportPeriodLabel = (period: ReportPeriod) => ({ dia: 'Últimos 7 días', mes: 'Este mes', ano: 'Este año', historico: 'Histórico' }[period]);
 export const reportDateLabel = (value: string, period: ReportPeriod) => {
-  const date = new Date(`${value}T00:00:00`);
+  const raw = String(value || '');
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const local = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  const date = iso
+    ? new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]))
+    : local
+      ? new Date(Number(local[3]), Number(local[2]) - 1, Number(local[1]))
+      : new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw.slice(0, 10) || '—';
   return period === 'ano' || period === 'historico'
     ? date.toLocaleDateString('es-PE', { month: 'short' }).replace('.', '')
     : date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }).replace('.', '');
