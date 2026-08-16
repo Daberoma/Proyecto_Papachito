@@ -141,6 +141,15 @@ app.delete('/api/ventas/:uuid', async (req, res) => {
 });
 
 app.get('/api/ventas', async (_req, res) => {
+  const desde = String(_req.query.desde || '').trim();
+  const hasta = String(_req.query.hasta || '').trim();
+  const filters = [];
+  const values = [];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(desde)) { values.push(desde); filters.push(`s.sale_date >= $${values.length}::date`); }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(hasta)) { values.push(hasta); filters.push(`s.sale_date < ($${values.length}::date + INTERVAL '1 day')`); }
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  const limit = desde || hasta ? 5000 : 100;
+  values.push(limit);
   const result = await pool.query(`
     SELECT s.sale_uuid AS uuid, s.legacy_cpe_id, s.document_type, s.series, s.document_number, s.status,
            COALESCE(s.original_payload->>'seller', s.customer_name) AS customer_name, s.sold_at, s.total,
@@ -148,10 +157,22 @@ app.get('/api/ventas', async (_req, res) => {
            COALESCE((SELECT json_agg(json_build_object('name', si.product_name, 'quantity', si.quantity, 'price', si.unit_price))
                      FROM sale_items si WHERE si.sale_id=s.id), '[]'::json) AS items
     FROM sales s
+    ${where}
     ORDER BY s.sold_at DESC
-    LIMIT 100
-  `);
+    LIMIT $${values.length}
+  `, values);
   res.json({ ok: true, sales: result.rows });
+});
+
+app.get('/api/ventas/dias', async (_req, res) => {
+  const result = await pool.query(`
+    SELECT sale_date::date AS date, COUNT(*)::int AS count, COALESCE(SUM(total), 0)::float AS total
+    FROM sales
+    WHERE status = 'completed'
+    GROUP BY sale_date::date
+    ORDER BY date DESC
+  `);
+  res.json({ ok: true, days: result.rows });
 });
 
 app.get('/api/reportes', async (req, res) => {
