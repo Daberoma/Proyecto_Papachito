@@ -17,6 +17,19 @@ Use this skill to resume work on Papachito Móvil without reconstructing the his
 6. Validate each change with syntax checks, database checks, and a mobile UI smoke test when applicable.
 7. Append a concise entry to `SYSTEM-MOVEMENT.md` describing files changed, checks run, and remaining risks.
 
+## Mapa de edición rápida
+
+Antes de editar, leer `docs/CODE-INDEX.md`. La lógica nueva debe ir en el módulo de su capa:
+
+- UI móvil: `mobile/src/screens/` y `mobile/src/components/`.
+- API móvil: `mobile/src/services/`.
+- Offline: `mobile/src/storage/` y `mobile/src/offline.ts`.
+- Rutas backend: `backend-node/src/routes/`.
+- Casos de negocio: `backend-node/src/services/`.
+- PostgreSQL: `backend-node/src/db/` y `postgresql-migration/sql/`.
+
+No añadir funcionalidad nueva a los archivos raíz si existe un módulo apropiado. Actualizar el índice cuando cambie el flujo y ejecutar la validación de la capa afectada.
+
 ## Migration rules
 
 - The target is a new PostgreSQL database named `papachito_app` with application role `papachito_app`.
@@ -29,4 +42,3 @@ Use this skill to resume work on Papachito Móvil without reconstructing the his
 ## Agent roles
 
 Read `references/agent-roles.md` when parallel work is useful. Agents may inspect independently, but only one agent should mutate a given migration file at a time.
-

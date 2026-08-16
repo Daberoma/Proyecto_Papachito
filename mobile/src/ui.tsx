@@ -233,6 +233,32 @@ export function BottomNav({ screen, setScreen, safeBottom }: { screen: Screen; s
   );
 }
 
+export function DesktopNav({ screen, setScreen, sellerName, online }: { screen: Screen; setScreen: (screen: Screen) => void; sellerName: string; online: boolean }) {
+  const items: { key: Screen; icon: LucideIcon; label: string; hint: string }[] = [
+    { key: 'sale', icon: ShoppingCart, label: 'Vender', hint: 'Nueva operación' },
+    { key: 'history', icon: ReceiptText, label: 'Historial', hint: 'Ventas guardadas' },
+    { key: 'report', icon: BarChart3, label: 'Reporte', hint: 'Resumen y métricas' },
+    { key: 'settings', icon: Settings, label: 'Ajustes', hint: 'Configuración' },
+  ];
+  return (
+    <View style={styles.desktopNav}>
+      <Image source={require('../papachito-logo.jpg')} style={styles.desktopLogo} />
+      <Text style={styles.desktopBrand}>DONDE PAPACHITO</Text>
+      <Text style={styles.desktopUser}>{sellerName || 'Vendedor'}</Text>
+      <View style={styles.desktopStatus}><View style={[styles.desktopStatusDot, online ? styles.desktopDotOn : styles.desktopDotOff]} /><Text style={styles.desktopStatusText}>{online ? 'Conectado' : 'Sin conexión'}</Text></View>
+      <View style={styles.desktopMenu}>
+        {items.map((item) => (
+          <Pressable key={item.key} onPress={() => setScreen(item.key)} style={({ pressed }) => [styles.desktopNavItem, screen === item.key && styles.desktopNavItemActive, pressed && styles.navPressed]}>
+            <item.icon size={20} color={screen === item.key ? '#fff' : '#b8d3c8'} strokeWidth={2.2} />
+            <View style={styles.desktopNavText}><Text style={[styles.desktopNavLabel, screen === item.key && styles.desktopNavLabelActive]}>{item.label}</Text><Text style={styles.desktopNavHint}>{item.hint}</Text></View>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={styles.desktopFooter}>Sistema local · 8090</Text>
+    </View>
+  );
+}
+
 export function SaleRow({ sale, onDelete }: { sale: OfflineSale; onDelete: () => void }) {
   return (
     <View style={styles.historyRow}>
@@ -306,6 +332,24 @@ export const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f6f1ea', alignItems: 'center' },
   shell: { flex: 1, width: '100%', maxWidth: 1120, backgroundColor: '#f6f1ea' },
   shellWide: { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#e7ded3' },
+  shellDesktop: { paddingLeft: 220 },
+  desktopNav: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 220, backgroundColor: '#123f35', paddingHorizontal: 18, paddingTop: 28, zIndex: 30 },
+  desktopLogo: { width: 58, height: 58, borderRadius: 29, alignSelf: 'center' },
+  desktopBrand: { color: '#e7f1eb', fontSize: 12, fontWeight: '900', letterSpacing: 1.6, textAlign: 'center', marginTop: 12 },
+  desktopUser: { color: '#b8d3c8', textAlign: 'center', marginTop: 5, fontWeight: '800' },
+  desktopStatus: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 18, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.08)' },
+  desktopStatusDot: { width: 8, height: 8, borderRadius: 4 },
+  desktopDotOn: { backgroundColor: '#73d39d' },
+  desktopDotOff: { backgroundColor: '#e8b06b' },
+  desktopStatusText: { color: '#d8e8df', fontSize: 12, fontWeight: '800' },
+  desktopMenu: { gap: 8, marginTop: 28 },
+  desktopNavItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 13, borderRadius: 12 },
+  desktopNavItemActive: { backgroundColor: '#2b705d' },
+  desktopNavText: { flex: 1 },
+  desktopNavLabel: { color: '#b8d3c8', fontSize: 15, fontWeight: '900' },
+  desktopNavLabelActive: { color: '#fff' },
+  desktopNavHint: { color: '#83ad9d', fontSize: 11, marginTop: 2 },
+  desktopFooter: { position: 'absolute', left: 18, right: 18, bottom: 22, color: '#83ad9d', fontSize: 11, textAlign: 'center' },
   centerCard: { width: '92%', maxWidth: 420, alignSelf: 'center', marginTop: 90, backgroundColor: '#fffdfa', borderWidth: 1, borderColor: '#e6ddd2', borderRadius: 8, padding: 24, gap: 14 },
   setupLogo: { width: 96, height: 96, borderRadius: 48, alignSelf: 'center' },
   header: { paddingHorizontal: 24, paddingTop: 28, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' },

@@ -3,7 +3,7 @@ import { Image, Pressable, ScrollView, Switch, Text, TextInput, View } from 'rea
 import { CameraView } from 'expo-camera';
 import { Package, ReceiptText, Search, SlidersHorizontal, X } from 'lucide-react-native';
 import { money, reportDateLabel, reportPeriodLabel, saleTime, shortDate, type ReportPeriod, type Screen } from './domain';
-import { BottomNav, CartSheet, Empty, Kpi, ProductCard, RankRow, SaleRow, SectionTitle, Stat, styles, screenTitle } from './ui';
+import { BottomNav, CartSheet, CartSummary, DesktopNav, Empty, Kpi, ProductCard, RankRow, SaleRow, SectionTitle, Stat, styles, screenTitle } from './ui';
 import type { usePapachitoApp } from './usePapachitoApp';
 
 type AppState = ReturnType<typeof usePapachitoApp>;
@@ -54,7 +54,8 @@ export function MainShell({ app }: { app: AppState }) {
   }, [filteredProducts.length, productRenderLimit]);
   return (
   <View style={styles.safe}>
-    <View style={[styles.shell, isWide && styles.shellWide]}>
+    <View style={[styles.shell, isWide && styles.shellWide, isWide && styles.shellDesktop]}>
+      {isWide ? <DesktopNav screen={screen} setScreen={(next: Screen) => navigateTo(next)} sellerName={sellerName} online={online} /> : null}
       <View style={[styles.header, isNarrow && styles.headerCompact, { paddingTop: Math.max(insets.top + 8, isNarrow ? 18 : 28) }]}>
         <Image source={require('../papachito-logo.jpg')} style={styles.headerLogo} />
         <View style={styles.userBlock}>
@@ -324,7 +325,7 @@ export function MainShell({ app }: { app: AppState }) {
           </View>
         </View>
       ) : null}
-      <BottomNav screen={screen} setScreen={(next: Screen) => navigateTo(next)} safeBottom={insets.bottom} />
+      {!isWide ? <BottomNav screen={screen} setScreen={(next: Screen) => navigateTo(next)} safeBottom={insets.bottom} /> : null}
     </View>
   </View>
   );

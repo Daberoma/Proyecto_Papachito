@@ -338,21 +338,25 @@ export function usePapachitoApp() {
 
   const connectFromQr = async (raw: string) => {
     try {
-      const value = raw.trim();
+      const value = raw.trim().replace(/[\r\n]/g, '');
       let api = '';
       if (value.startsWith('papachito://')) {
-        const query = value.split('?')[1] || '';
-        const encoded = query.split('&').find((part) => part.startsWith('api='))?.slice(4) || '';
-        api = decodeURIComponent(encoded);
+        const query = value.slice(value.indexOf('?') + 1);
+        const encoded = query.split('&').find((part) => part.toLowerCase().startsWith('api='))?.slice(4) || '';
+        api = decodeURIComponent(encoded.replace(/\+/g, '%20'));
       } else if (/^https?:\/\//i.test(value)) {
         api = value;
       }
       if (!/^https?:\/\/[^\s/]+:\d+$/.test(api || '')) throw new Error('QR no válido');
+      api = api.trim().replace(/\/$/, '');
+      if (!/^https?:\/\/[^\s/:]+(?::\d+)?$/i.test(api || '')) throw new Error('QR no válido');
       setScannerOpen(false);
-      setApiBaseState(api!.replace(/\/$/, ''));
-      await setApiBase(api!.replace(/\/$/, ''));
+      setApiBaseState(api);
+      const probe = await fetch(`${api}/api/salud`, { signal: AbortSignal.timeout(3500) });
+      if (!probe.ok) throw new Error('No se pudo contactar la laptop. Verifica que ambos estén en la misma WiFi.');
+      await setApiBase(api);
       setSavedApiBases(await getApiBases());
-      await loadCatalog(api!.replace(/\/$/, ''));
+      await loadCatalog(api);
       await syncNow();
       Alert.alert('Conectado', 'Servidor guardado y sincronización iniciada.');
     } catch (error: any) {

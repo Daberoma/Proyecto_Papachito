@@ -3,6 +3,15 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 chcp 65001 | Out-Null
 $root = $PSScriptRoot
 $node = 'C:\Program Files\nodejs\node.exe'
+
+# Si la tarea se inició con Windows PowerShell 5.1, continúa en PowerShell 7
+# para una consola UTF-8 y una visualización más estable del QR.
+$pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+if ($pwsh -and $PSVersionTable.PSEdition -ne 'Core') {
+  & $pwsh.Source -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath
+  exit $LASTEXITCODE
+}
+
 $secretFile = Join-Path $root '.secrets\pg-password.xml'
 if (-not (Test-Path $secretFile)) { Write-Host 'Falta configurar la contraseña PostgreSQL.'; exit 2 }
 
@@ -28,13 +37,13 @@ while ($true) {
     Write-Host "Red detectada: $ip" -ForegroundColor Cyan
     Write-Host "API: http://${ip}:8090"
     Write-Host "Web: http://${ip}:8091"
-    Write-Host 'Conecta el celular a esta misma red Wi-Fi antes de escanear.' -ForegroundColor Yellow
+    Write-Host 'Conecta el celular a esta misma red WiFi antes de escanear.' -ForegroundColor Yellow
     Write-Host ''
     & $node (Join-Path $root 'backend-node\print-qr.js') "http://${ip}:8090" "http://${ip}:8091"
     Write-Host ''
     Write-Host 'En la APK: Ajustes > Escanear QR de la laptop.' -ForegroundColor Yellow
-    Write-Host 'Conecta el celular a esta misma red Wi-Fi para escanear y sincronizar.' -ForegroundColor Yellow
-    Write-Host 'Si cambia la red, este QR se actualiza automáticamente.' -ForegroundColor Yellow
+    Write-Host 'Conecta el celular a esta misma red WiFi para escanear y sincronizar.' -ForegroundColor Yellow
+    Write-Host 'Si cambia la red, este QR se actualiza automaticamente.' -ForegroundColor Yellow
   }
   Start-Sleep -Seconds 5
 }

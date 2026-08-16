@@ -20,5 +20,7 @@ $env:PAPACHITO_PG_PASSWORD = $password
 Set-Location -LiteralPath (Join-Path $root 'backend-node')
 Start-Process -FilePath $node -ArgumentList 'server.js' -WorkingDirectory (Join-Path $root 'backend-node') -WindowStyle Hidden
 if (Test-Path $php) {
-  Start-Process -FilePath $php -ArgumentList @('-S','0.0.0.0:8091','-t',$webBuild) -WorkingDirectory $webBuild -WindowStyle Hidden
+  # Un único argumento evita que PowerShell fragmente la ruta/opciones al iniciar PHP.
+  Start-Process -FilePath $php -ArgumentList "-S 0.0.0.0:8091 -t `"$webBuild`"" -WorkingDirectory $webBuild -WindowStyle Hidden
+  Start-Process 'http://127.0.0.1:8091/'
 }
