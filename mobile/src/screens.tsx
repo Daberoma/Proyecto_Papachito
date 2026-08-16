@@ -39,7 +39,7 @@ export function ProfileSetupScreen({ name, onNameChange, onContinue }: { name: s
 }
 
 export function MainShell({ app }: { app: AppState }) {
-  const { insets,isWide,isNarrow,productCardWidth,booting,hasProfile,setupName,sellerName,settingsName,screen,products,cart,sales,online,apiBase,loadingCatalog,search,category,cartOpen,paymentMethod,reportPeriod,remoteReport,reportLoading,scannerOpen,searchingServer,lastSyncAt,simpleView,paymentConfig,savedApiBases,addedProductPulse,pendingCount,cartTotal,categories,searchText,filteredProducts,filteredSales,visibleSales,searchResults,todaySales,todayTotal,reportTotal,reportDays,maxReport,bestDay,topProducts,paymentBreakdown,sellerBreakdown,maxProductTotal,maxPaymentTotal,maxSellerTotal,reportSummary,reportSeries,reportMax,cameraPermission,requestCameraPermission,setSetupName,setSellerName,setSettingsName,setScreen,setProducts,setCart,setSales,setOnline,setApiBaseState,setLoadingCatalog,setSearch,setCategory,setCartOpen,setPaymentMethod,setReportPeriod,setRemoteReport,setReportLoading,setScannerOpen,setSearchingServer,setLastSyncAt,toggleSimpleView,togglePaymentMethod,navigateTo,refreshSales,cancelSale,loadCatalog,syncNow,openScanner,connectFromQr,loadReport,continueSetup,saveSettingsName,saveServer,addProduct,removeOne,removeProduct,confirmSale,selectSearchResult } = app;
+  const { insets,isWide,isNarrow,productCardWidth,booting,hasProfile,setupName,sellerName,settingsName,screen,products,cart,sales,online,apiBase,loadingCatalog,search,category,cartOpen,paymentMethod,reportPeriod,remoteReport,reportLoading,scannerOpen,searchingServer,lastSyncAt,simpleView,paymentConfig,savedApiBases,addedProductPulse,availableUpdate,updateChecking,updateInstalling,installedVersion,installedVersionCode,pendingCount,cartTotal,categories,searchText,filteredProducts,filteredSales,visibleSales,searchResults,todaySales,todayTotal,reportTotal,reportDays,maxReport,bestDay,topProducts,paymentBreakdown,sellerBreakdown,maxProductTotal,maxPaymentTotal,maxSellerTotal,reportSummary,reportSeries,reportMax,cameraPermission,requestCameraPermission,setSetupName,setSellerName,setSettingsName,setScreen,setProducts,setCart,setSales,setOnline,setApiBaseState,setLoadingCatalog,setSearch,setCategory,setCartOpen,setPaymentMethod,setReportPeriod,setRemoteReport,setReportLoading,setScannerOpen,setSearchingServer,setLastSyncAt,toggleSimpleView,togglePaymentMethod,navigateTo,refreshSales,cancelSale,loadCatalog,syncNow,openScanner,connectFromQr,loadReport,continueSetup,saveSettingsName,saveServer,checkForUpdate,installUpdate,addProduct,removeOne,removeProduct,confirmSale,selectSearchResult } = app;
   const [searchFocused, setSearchFocused] = useState(false);
   const [productRenderLimit, setProductRenderLimit] = useState(20);
   useEffect(() => {
@@ -214,8 +214,8 @@ export function MainShell({ app }: { app: AppState }) {
                 <Stat label="Pendientes" value={String(pendingCount)} />
                 <Stat label="Estado API" value={online ? 'Conectada' : 'Offline'} />
                 <Stat label="Filtro activo" value={searchText || 'Sin filtro'} />
-              </View>
-              <View style={styles.panel}>
+               </View>
+               <View style={styles.panel}>
                 <SectionTitle eyebrow="COBROS" title="Medios de pago" />
                 {paymentBreakdown.map((item) => (
                   <RankRow key={item.label} label={item.label} value={money(item.total)} percent={item.total / maxPaymentTotal} compact />
@@ -272,9 +272,27 @@ export function MainShell({ app }: { app: AppState }) {
                    <View style={styles.rowText}><Text style={styles.preferenceTitle}>Plin</Text><Text style={styles.muted}>Preparado para su QR</Text></View>
                    <Switch value={paymentConfig.plinEnabled} onValueChange={(value) => togglePaymentMethod('plinEnabled', value)} trackColor={{ false: '#d8d4cc', true: '#9ac9ae' }} thumbColor={paymentConfig.plinEnabled ? '#174f42' : '#fff'} />
                  </View>
-                 <Text style={styles.muted}>Activa los medios que realmente usas al cobrar.</Text>
-               </View>
+                  <Text style={styles.muted}>Activa los medios que realmente usas al cobrar.</Text>
+                </View>
               <View style={styles.panel}>
+                <SectionTitle eyebrow="APLICACIÓN" title="Actualización" />
+                <Text style={styles.muted}>Versión instalada: {installedVersion} · Código {installedVersionCode}</Text>
+                <Text style={styles.muted}>Las nuevas versiones se descargan desde GitHub Releases y se instalan como APK.</Text>
+                {availableUpdate ? (
+                  <View style={styles.updateNotice}>
+                    <Text style={styles.preferenceTitle}>{availableUpdate.name}</Text>
+                    <Text style={styles.muted}>Nueva versión {availableUpdate.version}</Text>
+                    <Text style={styles.muted} numberOfLines={4}>{availableUpdate.notes}</Text>
+                    <Pressable onPress={installUpdate} disabled={updateInstalling} style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}>
+                      <Text style={styles.primaryText}>{updateInstalling ? 'Descargando APK…' : 'Descargar e instalar'}</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+                <Pressable onPress={checkForUpdate} disabled={updateChecking} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
+                  <Text style={styles.secondaryText}>{updateChecking ? 'Revisando GitHub…' : 'Buscar actualización'}</Text>
+                </Pressable>
+              </View>
+               <View style={styles.panel}>
                 <SectionTitle eyebrow="SINCRONIZACION" title="Estado local" />
                 <Stat label="Ventas pendientes" value={String(pendingCount)} />
                 <Stat label="Servidor" value={online ? 'Conectado' : 'Sin conexión'} />
