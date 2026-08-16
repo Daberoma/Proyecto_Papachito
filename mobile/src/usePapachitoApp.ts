@@ -369,7 +369,7 @@ export function usePapachitoApp() {
     try {
       const base = await detectApiBase(apiCandidates);
       setApiBaseState(base);
-      const response = await fetch(`${base}/api/reportes?periodo=${period}`);
+      const response = await fetch(`${base}/api/reportes?periodo=${period}`, { signal: AbortSignal.timeout(3500) });
       const payload = await response.json();
       if (!response.ok || !payload.ok) throw new Error(payload.message || 'No se pudo cargar reporte');
       setRemoteReport(payload as RemoteReport);
@@ -558,7 +558,7 @@ export function usePapachitoApp() {
       Alert.alert('Carrito vacío', 'Agrega al menos un producto.');
       return;
     }
-    await queueSale({
+    const sale: OfflineSale = {
       id: `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       seller: sellerName,
       items: cart.map((item) => ({ id: item.id, name: item.name, price: Number(item.price), quantity: item.quantity })),
@@ -566,12 +566,16 @@ export function usePapachitoApp() {
       paymentMethod,
       createdAt: new Date().toISOString(),
       status: 'pending',
-    });
+    };
+    await queueSale(sale);
+    // La venta ya está segura en AsyncStorage. Actualizar el historial local
+    // inmediatamente permite cerrar el carrito sin esperar a la laptop o a
+    // una segunda lectura remota del historial.
+    setSales((current) => [...current, sale]);
     setCart([]);
     setCartOpen(false);
-    await refreshSales();
-    await syncNow();
-    Alert.alert(paymentMethod === 'digital' ? 'Pago digital guardado' : 'Venta guardada', online ? 'Guardada y enviada si la API está activa.' : 'Sin conexión: queda pendiente.');
+    Alert.alert(paymentMethod === 'digital' ? 'Pago digital guardado' : 'Venta guardada', 'La venta quedó guardada y se sincroniza en segundo plano.');
+    void syncNow();
   };
 
   const selectSearchResult = (result: SearchResult) => {
