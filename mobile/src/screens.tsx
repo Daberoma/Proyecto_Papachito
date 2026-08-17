@@ -451,6 +451,13 @@ export function MainShell({ app }: { app: AppState }) {
                 </Pressable>
                 {lastSyncAt ? <Text style={styles.muted}>Última sincronización: {saleTime(lastSyncAt)}</Text> : null}
               </View>
+              <View style={styles.panel}>
+                <SectionTitle eyebrow="PRUEBAS" title="Simular una venta" />
+                <Text style={styles.muted}>Crea una venta local de prueba para revisar el historial, el estado pendiente y el detalle sin enviar datos reales.</Text>
+                <Pressable onPress={simulateSale} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
+                  <Text style={styles.secondaryText}>Crear venta de prueba</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         )}
@@ -461,16 +468,9 @@ export function MainShell({ app }: { app: AppState }) {
           <Pressable onPress={() => setSelectedDay(null)} style={styles.dayModalDismiss} />
           <View style={styles.dayModalCard}>
             <View style={styles.dayModalHeader}>
-              <View style={styles.rowText}>
+              <View style={styles.dayModalHeaderCopy}>
                 <Text style={styles.eyebrow}>VENTAS DEL DÍA</Text>
-                <Text style={styles.dayModalTitle}>{reportDateLabel(selectedDay, 'dia')}</Text>
-              </View>
-              <View style={styles.panel}>
-                <SectionTitle eyebrow="PRUEBAS" title="Simular una venta" />
-                <Text style={styles.muted}>Crea una venta local de prueba para revisar el historial, el estado pendiente y el detalle sin enviar datos reales.</Text>
-                <Pressable onPress={simulateSale} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
-                  <Text style={styles.secondaryText}>Crear venta de prueba</Text>
-                </Pressable>
+                <Text style={styles.dayModalTitle} numberOfLines={1}>{reportDateLabel(selectedDay, 'dia')}</Text>
               </View>
               <Pressable onPress={() => setSelectedDay(null)} style={styles.closeButton}><X size={20} color="#174f42" /></Pressable>
             </View>
@@ -499,9 +499,9 @@ export function MainShell({ app }: { app: AppState }) {
           <Pressable onPress={() => setSelectedSale(null)} style={styles.dayModalDismiss} />
           <View style={styles.dayModalCard}>
             <View style={styles.dayModalHeader}>
-              <View style={styles.rowText}>
+              <View style={styles.dayModalHeaderCopy}>
                 <Text style={styles.eyebrow}>DETALLE DE BOLETA</Text>
-                <Text style={styles.dayModalTitle}>{reportDateLabel(selectedSale.createdAt, 'dia')}</Text>
+                <Text style={styles.dayModalTitle} numberOfLines={1}>{reportDateLabel(selectedSale.createdAt, 'dia')}</Text>
                 <Text style={styles.muted}>{saleTime(selectedSale.createdAt)} · {selectedSale.seller}</Text>
               </View>
               <Pressable onPress={() => setSelectedSale(null)} style={styles.closeButton}><X size={20} color="#174f42" /></Pressable>
@@ -535,7 +535,7 @@ export function MainShell({ app }: { app: AppState }) {
           <Pressable onPress={() => setHistoryModalOpen(false)} style={styles.dayModalDismiss} />
           <View style={styles.historyModalCard}>
             <View style={styles.dayModalHeader}>
-              <View style={styles.rowText}><Text style={styles.eyebrow}>HISTORIAL COMPLETO</Text><Text style={styles.dayModalTitle}>Ventas guardadas</Text></View>
+              <View style={styles.dayModalHeaderCopy}><Text style={styles.eyebrow}>HISTORIAL COMPLETO</Text><Text style={styles.dayModalTitle} numberOfLines={1}>Ventas guardadas</Text></View>
               <Pressable onPress={() => setHistoryModalOpen(false)} style={styles.closeButton}><X size={20} color="#174f42" /></Pressable>
             </View>
             <ScrollView style={styles.historyModalList}>{visibleSales.map((sale) => <View key={sale.id} style={styles.historyModalItem}><SaleRow sale={sale} onPress={() => { setHistoryModalOpen(false); setSelectedSale(sale); }} onDelete={() => cancelSale(sale)} /></View>)}</ScrollView>
