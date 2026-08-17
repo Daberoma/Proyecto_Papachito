@@ -17,8 +17,7 @@ export type CartItem = Product & { quantity: number };
 export type Screen = 'sale' | 'history' | 'report' | 'settings' | 'payments';
 export type SearchResult =
   | { type: 'product'; title: string; subtitle: string; product: Product }
-  | { type: 'sale'; title: string; subtitle: string; sale: OfflineSale }
-  | { type: 'action'; title: string; subtitle: string; screen: Screen };
+  | { type: 'sale'; title: string; subtitle: string; sale: OfflineSale };
 export type ReportPeriod = 'dia' | 'mes' | 'ano' | 'historico';
 export type RemoteReport = {
   period: ReportPeriod;
@@ -49,14 +48,17 @@ export const fallbackProducts: Product[] = [
   { id: 'demo-4', sku: 'DEMO-004', name: 'INKA COLA 1 LITRO', description: 'Bebida familiar | Unidad: NIU', price: 5, category: 'Gaseosas', stock: 0 },
 ];
 
-export const actions: SearchResult[] = [
-  { type: 'action', title: 'Vender producto', subtitle: 'Ir a nueva venta', screen: 'sale' },
-  { type: 'action', title: 'Ver historial', subtitle: 'Revisar compras guardadas', screen: 'history' },
-  { type: 'action', title: 'Ver reporte', subtitle: 'Resumen y grafico de ventas', screen: 'report' },
-  { type: 'action', title: 'Cambiar nombre', subtitle: 'Editar vendedor en ajustes', screen: 'settings' },
-];
-
 export const money = (value: number) => `S/ ${value.toFixed(2)}`;
+export const localDateKey = (value: Date | string) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+export const productSearchText = (product: Product) => `${product.name} ${product.description || ''} ${product.category || ''} ${product.sku || ''} ${product.barcode || ''} ${product.price}`.toLowerCase();
+export const saleSearchText = (sale: OfflineSale) => `${sale.seller} ${sale.status} ${sale.total} ${sale.items.map((item) => item.name).join(' ')}`.toLowerCase();
+
 export const classifyProduct = (product: Product): string => {
   const text = `${product.name} ${product.description || ''}`.toLowerCase();
   if (/coca|inka|gaseosa|sprite|pepsi|fanta|cola/.test(text)) return 'Gaseosas';

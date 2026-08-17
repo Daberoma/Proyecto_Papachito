@@ -5,8 +5,8 @@ import { useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getSales,getApiBase,getApiBases,getCatalog,getSeller,getSimpleView,getPaymentConfig,queueSale,removeSale,setSeller,setApiBase,setSimpleView as persistSimpleView,setPaymentConfig,setCatalog,discoverApiBase,detectApiBase,syncPendingSales,type OfflineSale,type PaymentConfig,type PaymentMethodKey } from './offline';
-import { API,apiCandidates,classifyProduct,fallbackProducts,money,saleTime,type CartItem,type Product,type RemoteReport,type ReportPeriod,type Screen,type SearchResult } from './domain';
+import { getSales,getApiBase,getApiBases,getCatalog,getSeller,getPaymentConfig,queueSale,removeSale,setSeller,setApiBase,setPaymentConfig,setCatalog,discoverApiBase,detectApiBase,syncPendingSales,type OfflineSale,type PaymentConfig,type PaymentMethodKey } from './offline';
+import { API,apiCandidates,classifyProduct,fallbackProducts,localDateKey,money,productSearchText,saleSearchText,saleTime,type CartItem,type Product,type RemoteReport,type ReportPeriod,type Screen,type SearchResult } from './domain';
 import { checkGithubApkUpdate, downloadAndOpenGithubApk, installedVersion, installedVersionCode, type GithubApkUpdate } from './githubApkUpdate';
 
 const remoteSaleToOffline = (sale: any): OfflineSale => ({
@@ -19,6 +19,11 @@ const remoteSaleToOffline = (sale: any): OfflineSale => ({
   createdAt: sale.sold_at || new Date().toISOString(),
   status: 'synced',
 });
+
+const mergeSales = (local: OfflineSale[], remote: OfflineSale[]) => {
+  const localIds = new Set(local.map((sale) => sale.remoteUuid || sale.id));
+  return [...local, ...remote.filter((sale) => !localIds.has(sale.remoteUuid || sale.id))];
+};
 
 export function usePapachitoApp() {
   const { width } = useWindowDimensions();
@@ -44,11 +49,6 @@ export function usePapachitoApp() {
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('Todo');
-  const [quickName, setQuickName] = useState('');
-  const [quickPrice, setQuickPrice] = useState('');
-  const [newProductName, setNewProductName] = useState('');
-  const [newProductPrice, setNewProductPrice] = useState('');
-  const [newProductCategory, setNewProductCategory] = useState('Otros');
   const [cartOpen, setCartOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'digital'>('cash');
   const [reportPeriod, setReportPeriod] = useState<ReportPeriod>('mes');
@@ -59,7 +59,6 @@ export function usePapachitoApp() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [searchingServer, setSearchingServer] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<string>('');
-  const [simpleView, setSimpleViewState] = useState(false);
   const [savedApiBases, setSavedApiBases] = useState<string[]>([]);
   const [addedProductPulse, setAddedProductPulse] = useState('');
   const [paymentConfig, setPaymentConfigState] = useState<PaymentConfig>({ yapeEnabled: true, plinEnabled: false, bbvaEnabled: false });
@@ -80,8 +79,7 @@ export function usePapachitoApp() {
 
   const filteredProducts = useMemo(() => {
     return products.filter((item) => {
-      const haystack = `${item.name} ${item.description || ''} ${item.category || ''} ${item.sku || ''} ${item.barcode || ''} ${item.price}`.toLowerCase();
-      const matchesText = !searchText || haystack.includes(searchText);
+      const matchesText = !searchText || productSearchText(item).includes(searchText);
       const matchesCategory = category === 'Todo' || (item.category || 'Otros') === category;
       return matchesText && matchesCategory;
     });
@@ -89,16 +87,13 @@ export function usePapachitoApp() {
 
   const filteredSales = useMemo(() => {
     if (!searchText) return sales;
-    return sales.filter((sale) => {
-      const itemText = sale.items.map((item) => item.name).join(' ');
-      return `${sale.seller} ${sale.status} ${sale.total} ${itemText}`.toLowerCase().includes(searchText);
-    });
+    return sales.filter((sale) => saleSearchText(sale).includes(searchText));
   }, [sales, searchText]);
 
   const searchResults = useMemo<SearchResult[]>(() => {
     if (!searchText) return [];
     const productResults: SearchResult[] = products
-      .filter((item) => `${item.name} ${item.description || ''} ${item.category || ''} ${item.sku || ''} ${item.barcode || ''} ${item.price}`.toLowerCase().includes(searchText))
+      .filter((item) => productSearchText(item).includes(searchText))
       .slice(0, 5)
       .map((product) => ({
         type: 'product',
@@ -107,12 +102,12 @@ export function usePapachitoApp() {
         product,
       }));
     const saleResults: SearchResult[] = sales
-      .filter((sale) => `${sale.seller} ${sale.status} ${sale.total} ${sale.items.map((item) => item.name).join(' ')}`.toLowerCase().includes(searchText))
+      .filter((sale) => saleSearchText(sale).includes(searchText))
       .slice(-4)
       .reverse()
       .map((sale) => ({
         type: 'sale',
-        title: sale.status === 'synced' ? 'Boleta sincronizada' : 'Boleta pendiente',
+        title: sale.status === 'synced' ? 'Venta enviada' : 'Venta pendiente',
         subtitle: `${saleTime(sale.createdAt)} · ${sale.seller} · ${money(sale.total)}`,
         sale,
       }));
@@ -121,27 +116,30 @@ export function usePapachitoApp() {
 
   const visibleSales = useMemo(() => filteredSales.slice().reverse(), [filteredSales]);
   const todaySales = useMemo(() => {
-    const today = new Date().toDateString();
-    return sales.filter((sale) => new Date(sale.createdAt).toDateString() === today);
+    const today = localDateKey(new Date());
+    return sales.filter((sale) => localDateKey(sale.createdAt) === today);
   }, [sales]);
   const todayTotal = useMemo(() => todaySales.reduce((sum, sale) => sum + sale.total, 0), [todaySales]);
   const reportTotal = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
   const reportDays = useMemo(() => {
+    const totals = new Map<string, number>();
+    sales.forEach((sale) => {
+      const key = localDateKey(sale.createdAt);
+      totals.set(key, (totals.get(key) || 0) + Number(sale.total || 0));
+    });
     const rows: { date: string; label: string; total: number }[] = [];
     for (let i = 6; i >= 0; i -= 1) {
       const date = new Date();
       date.setDate(date.getDate() - i);
-      const key = date.toDateString();
+      const dateKey = localDateKey(date);
       rows.push({
-        date: date.toISOString().slice(0, 10),
+        date: dateKey,
         label: date.toLocaleDateString('es-PE', { weekday: 'short' }),
-        total: sales.filter((sale) => new Date(sale.createdAt).toDateString() === key).reduce((sum, sale) => sum + sale.total, 0),
+        total: totals.get(dateKey) || 0,
       });
     }
     return rows;
   }, [sales]);
-  const maxReport = Math.max(1, ...reportDays.map((day) => day.total));
-  const bestDay = reportDays.reduce((best, day) => (day.total > best.total ? day : best), reportDays[0] || { label: '-', total: 0 });
   const topProducts = useMemo(() => {
     if (remoteReport?.topProducts?.length) return remoteReport.topProducts;
     const map = new Map<string, { name: string; quantity: number; total: number }>();
@@ -224,8 +222,7 @@ export function usePapachitoApp() {
         const payload = await response.json();
         if (response.ok && payload.ok && Array.isArray(payload.sales)) {
           const historical: OfflineSale[] = payload.sales.map(remoteSaleToOffline);
-          const localIds = new Set(local.map((sale) => sale.remoteUuid || sale.id));
-          merged = [...local, ...historical.filter((sale) => !localIds.has(sale.remoteUuid || sale.id))];
+          merged = mergeSales(local, historical);
         }
       }
     } catch { /* el historial local sigue disponible sin conexión */ }
@@ -451,11 +448,10 @@ export function usePapachitoApp() {
     // Arranque local-first: ninguna petición de red puede bloquear la primera
     // pantalla. Todo lo necesario para vender offline se lee en paralelo.
     (async () => {
-      const [storedName, storedApi, savedBases, localSimpleView, localPaymentConfig, cached, localSales] = await Promise.all([
+      const [storedName, storedApi, savedBases, localPaymentConfig, cached, localSales] = await Promise.all([
         getSeller(),
         getApiBase(),
         getApiBases(),
-        getSimpleView(),
         getPaymentConfig(),
         getCatalog<Product[]>(),
         getSales(),
@@ -469,7 +465,6 @@ export function usePapachitoApp() {
       }
       if (storedApi) setApiBaseState(storedApi);
       setSavedApiBases(savedBases);
-      setSimpleViewState(localSimpleView);
       setPaymentConfigState(localPaymentConfig);
       if (cached.length) setProducts(cached);
       setSales(localSales);
@@ -579,8 +574,7 @@ export function usePapachitoApp() {
       const payload = await response.json();
       if (!response.ok || !payload.ok || !Array.isArray(payload.sales)) return localForDay;
       const remote = payload.sales.map(remoteSaleToOffline);
-      const localIds = new Set(localForDay.map((sale) => sale.remoteUuid || sale.id));
-      return [...localForDay, ...remote.filter((sale: OfflineSale) => !localIds.has(sale.remoteUuid || sale.id))];
+      return mergeSales(localForDay, remote);
     } catch {
       return localForDay;
     }
@@ -615,49 +609,6 @@ export function usePapachitoApp() {
     );
   };
 
-  const removeProduct = (product: CartItem) => {
-    setCart((current) => current.filter((item) => String(item.id) !== String(product.id)));
-  };
-
-  const addQuickProduct = () => {
-    const name = quickName.trim();
-    const price = Number(quickPrice.replace(',', '.'));
-    if (!name || !Number.isFinite(price) || price <= 0) {
-      Alert.alert('Producto incompleto', 'Escribe nombre y precio en soles.');
-      return;
-    }
-    addProduct({ id: `quick-${Date.now()}`, name, price, category: 'Rápido' });
-    setQuickName('');
-    setQuickPrice('');
-  };
-
-  const createProduct = async () => {
-    const name = newProductName.trim();
-    const price = Number(newProductPrice.replace(',', '.'));
-    const categoryName = newProductCategory.trim() || 'Otros';
-    if (!name || !Number.isFinite(price) || price <= 0) {
-      Alert.alert('Producto incompleto', 'Escribe nombre y precio válidos.');
-      return;
-    }
-    try {
-      const base = await detectApiBase(apiCandidates);
-      const response = await fetch(`${base}/api/config/productos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, price, category: categoryName, description: 'Producto creado desde Donde Papachito' }),
-      });
-      const payload = await response.json();
-      if (!response.ok || !payload.ok) throw new Error(payload.message || 'No se pudo guardar el producto');
-      setNewProductName('');
-      setNewProductPrice('');
-      setNewProductCategory('Otros');
-      await loadCatalog(base);
-      Alert.alert('Producto guardado', 'Ya aparece en el catálogo para venderlo.');
-    } catch (error: any) {
-      Alert.alert('No se pudo guardar', error?.message || 'Conecta la laptop y vuelve a intentarlo.');
-    }
-  };
-
   const confirmSale = async () => {
     if (!cart.length) {
       Alert.alert('Carrito vacío', 'Agrega al menos un producto.');
@@ -687,20 +638,16 @@ export function usePapachitoApp() {
     if (result.type === 'product') {
       setScreen('sale');
       addProduct(result.product);
+    } else {
+      setScreen('history');
+      setCartOpen(false);
     }
-    if (result.type === 'sale') { setScreen('history'); setCartOpen(false); }
-    if (result.type === 'action') { setScreen(result.screen); if (result.screen !== 'sale') setCartOpen(false); }
     setSearch('');
   };
 
   const navigateTo = useCallback((next: Screen) => {
     setScreen(next);
     if (next !== 'sale') setCartOpen(false);
-  }, []);
-
-  const toggleSimpleView = useCallback(async (value: boolean) => {
-    setSimpleViewState(value);
-    await persistSimpleView(value);
   }, []);
 
   const togglePaymentMethod = useCallback(async (method: 'yapeEnabled' | 'plinEnabled' | 'bbvaEnabled', value: boolean) => {
@@ -745,6 +692,16 @@ export function usePapachitoApp() {
     });
   }, []);
 
-
-  return { insets,isWide,isNarrow,productCardWidth,booting,hasProfile,setupName,sellerName,settingsName,screen,products,cart,sales,online,apiBase,loadingCatalog,search,category,quickName,quickPrice,newProductName,newProductPrice,newProductCategory,cartOpen,paymentMethod,reportPeriod,remoteReport,calendarSaleCounts,reportLoading,scannerOpen,searchingServer,lastSyncAt,simpleView,paymentConfig,savedApiBases,addedProductPulse,availableUpdate,updateChecking,updateInstalling,installedVersion,installedVersionCode,pendingCount,cartTotal,categories,searchText,filteredProducts,filteredSales,visibleSales,searchResults,todaySales,todayTotal,reportTotal,reportDays,maxReport,bestDay,topProducts,paymentBreakdown,sellerBreakdown,maxProductTotal,maxPaymentTotal,maxSellerTotal,reportSummary,reportSeries,reportMax,cameraPermission,requestCameraPermission,setSetupName,setSellerName,setSettingsName,setScreen,setProducts,setCart,setSales,setOnline,setApiBaseState,setLoadingCatalog,setSearch,setCategory,setQuickName,setQuickPrice,setNewProductName,setNewProductPrice,setNewProductCategory,setCartOpen,setPaymentMethod,setReportPeriod,setRemoteReport,setReportLoading,setScannerOpen,setSearchingServer,setLastSyncAt,toggleSimpleView,togglePaymentMethod,pickPaymentQr,removePaymentQr,navigateTo,refreshSales,cancelSale,simulateSale,loadSalesForDate,loadCatalog,syncNow,openScanner,connectFromQr,loadReport,continueSetup,saveSettingsName,saveServer,checkForUpdate,installUpdate,addProduct,removeOne,removeProduct,addQuickProduct,createProduct,confirmSale,selectSearchResult };
+  return {
+    insets, isWide, isNarrow, productCardWidth, booting, hasProfile, setupName, sellerName, settingsName, screen, products, cart, sales,
+    online, apiBase, loadingCatalog, search, category, cartOpen, paymentMethod, reportPeriod, remoteReport, calendarSaleCounts,
+    reportLoading, scannerOpen, searchingServer, lastSyncAt, paymentConfig, savedApiBases, addedProductPulse, availableUpdate,
+    updateChecking, updateInstalling, installedVersion, installedVersionCode, pendingCount, cartTotal, categories, searchText,
+    filteredProducts, filteredSales, visibleSales, searchResults, todaySales, todayTotal, reportTotal, topProducts, paymentBreakdown,
+    sellerBreakdown, maxProductTotal, maxPaymentTotal, maxSellerTotal, reportSummary, reportSeries, reportMax, setSetupName,
+    setSettingsName, setApiBaseState, setSearch, setCategory, setCartOpen, setPaymentMethod, setReportPeriod, setScannerOpen,
+    togglePaymentMethod, pickPaymentQr, removePaymentQr, navigateTo, refreshSales, cancelSale, simulateSale, loadSalesForDate,
+    syncNow, openScanner, connectFromQr, loadReport, continueSetup, saveSettingsName, saveServer, checkForUpdate, installUpdate,
+    addProduct, removeOne, confirmSale, selectSearchResult,
+  };
 }

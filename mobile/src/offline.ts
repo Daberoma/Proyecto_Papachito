@@ -5,7 +5,6 @@ const SELLER_KEY='papachito.seller';
 const API_KEY='papachito.api.base';
 const API_HISTORY_KEY='papachito.api.history';
 const CATALOG_KEY='papachito.catalog';
-const SIMPLE_VIEW_KEY='papachito.simple.view';
 const PAYMENT_CONFIG_KEY='papachito.payment.config';
 export type PaymentMethodKey='yape'|'plin'|'bbva';
 export type PaymentConfig={
@@ -22,13 +21,10 @@ export async function replaceSales(s:OfflineSale[]){await AsyncStorage.setItem(S
 export async function removeSale(id:string){const all=await getSales();await replaceSales(all.filter((sale)=>sale.id!==id));}
 export async function getSeller(){return (await AsyncStorage.getItem(SELLER_KEY))||''}
 export async function setSeller(v:string){await AsyncStorage.setItem(SELLER_KEY,v.trim())}
-export async function clearSeller(){await AsyncStorage.removeItem(SELLER_KEY)}
 export async function getApiBase(){return (await AsyncStorage.getItem(API_KEY))||''}
 export async function getApiBases():Promise<string[]>{try{return JSON.parse(await AsyncStorage.getItem(API_HISTORY_KEY)||'[]')}catch{return[]}}
 export async function rememberApiBase(v:string){const value=v.trim().replace(/\/$/,'');if(!value)return;const all=await getApiBases();await AsyncStorage.setItem(API_HISTORY_KEY,JSON.stringify([value,...all.filter((item)=>item!==value)].slice(0,8)))}
 export async function setApiBase(v:string){await AsyncStorage.setItem(API_KEY,v);await rememberApiBase(v)}
-export async function getSimpleView(){return (await AsyncStorage.getItem(SIMPLE_VIEW_KEY))==='true'}
-export async function setSimpleView(v:boolean){await AsyncStorage.setItem(SIMPLE_VIEW_KEY,String(v))}
 export async function getPaymentConfig():Promise<PaymentConfig>{
  try{return {...{yapeEnabled:true,plinEnabled:false,bbvaEnabled:false},...JSON.parse(await AsyncStorage.getItem(PAYMENT_CONFIG_KEY)||'{}')}}catch{return {yapeEnabled:true,plinEnabled:false,bbvaEnabled:false}}
 }

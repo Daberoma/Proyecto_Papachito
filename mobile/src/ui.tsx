@@ -11,16 +11,12 @@ import {
 } from 'react-native';
 import {
   BarChart3,
-  ClipboardList,
   Minus,
   Maximize2,
-  Package,
   Plus,
   ReceiptText,
-  ScanLine,
   Settings,
   ShoppingCart,
-  Trash2,
   WalletCards,
   X,
 } from 'lucide-react-native';
@@ -59,28 +55,7 @@ export function SectionTitle({ eyebrow, title, right, onRight, compact }: { eyeb
   );
 }
 
-export function CartSummary({ cart, total, onOpen }: { cart: CartItem[]; total: number; onOpen: () => void }) {
-  return (
-    <View style={styles.panel}>
-      <SectionTitle eyebrow="VENTA ACTUAL" title="Carrito" />
-      {cart.length === 0 ? (
-        <Empty title="Carrito vacío" copy="Toca un producto para agregarlo." compact />
-      ) : (
-        <>
-          <Stat label="Productos" value={String(cart.reduce((sum, item) => sum + item.quantity, 0))} />
-          <Stat label="Total" value={money(total)} />
-          <View style={styles.inlineActions}>
-            <Pressable onPress={onOpen} style={styles.primaryButton}>
-              <Text style={styles.primaryText}>Abrir carrito</Text>
-            </Pressable>
-          </View>
-        </>
-      )}
-    </View>
-  );
-}
-
-export function CartSheet({ cart, total, paymentMethod, simpleView, paymentConfig, onPaymentMethod, safeBottom, onClose, onAdd, onRemoveOne, onRemove, onConfirm }: { cart: CartItem[]; total: number; paymentMethod: 'cash' | 'digital'; simpleView: boolean; paymentConfig: { yapeEnabled: boolean; plinEnabled: boolean; bbvaEnabled: boolean; yapeQrUri?: string; plinQrUri?: string; bbvaQrUri?: string }; onPaymentMethod: (method: 'cash' | 'digital') => void; safeBottom: number; onClose: () => void; onAdd: (product: Product) => void; onRemoveOne: (product: CartItem) => void; onRemove: (product: CartItem) => void; onConfirm: () => void }) {
+export function CartSheet({ cart, total, paymentMethod, paymentConfig, onPaymentMethod, safeBottom, onClose, onAdd, onRemoveOne, onConfirm }: { cart: CartItem[]; total: number; paymentMethod: 'cash' | 'digital'; paymentConfig: { yapeEnabled: boolean; plinEnabled: boolean; bbvaEnabled: boolean; yapeQrUri?: string; plinQrUri?: string; bbvaQrUri?: string }; onPaymentMethod: (method: 'cash' | 'digital') => void; safeBottom: number; onClose: () => void; onAdd: (product: Product) => void; onRemoveOne: (product: CartItem) => void; onConfirm: () => void }) {
   const [qrExpanded, setQrExpanded] = useState(false);
   const [digitalProvider, setDigitalProvider] = useState<'yape' | 'plin' | 'bbva'>('yape');
   const digitalOptions = [
@@ -191,7 +166,7 @@ export function CartSheet({ cart, total, paymentMethod, simpleView, paymentConfi
 
 // Tarjeta memoizada: al añadir un producto solo cambia el carrito, no se vuelve a
 // renderizar cada una de las tarjetas del catálogo (importante con catálogos grandes).
-export const ProductCard = memo(function ProductCard({ item, width, simpleView, highlighted, onPress }: { item: Product; width: DimensionValue; simpleView: boolean; highlighted?: boolean; onPress: (product: Product) => void }) {
+export const ProductCard = memo(function ProductCard({ item, width, highlighted, onPress }: { item: Product; width: DimensionValue; highlighted?: boolean; onPress: (product: Product) => void }) {
   const pulse = useRef(new Animated.Value(1)).current;
   const category = (item.category || 'Otros').toLowerCase();
   const categoryStyle = category.includes('agua')
@@ -282,7 +257,7 @@ export function DesktopNav({ screen, setScreen, sellerName, online }: { screen: 
 export function SaleRow({ sale, onDelete, onPress }: { sale: OfflineSale; onDelete: () => void; onPress?: () => void }) {
   return (
     <View style={styles.historyRow}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Abrir boleta del ${shortDate(sale.createdAt)}`} onPress={onPress} style={({ pressed }) => [styles.historyTop, pressed && styles.buttonPressed]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Abrir venta del ${shortDate(sale.createdAt)}`} onPress={onPress} style={({ pressed }) => [styles.historyTop, pressed && styles.buttonPressed]}>
         <View style={styles.badge}><Text style={styles.badgeText}>B</Text></View>
         <View style={styles.rowText}>
           <Text style={styles.historyTitle} numberOfLines={1}>{sale.items[0]?.name || 'Venta sin productos'}{sale.items.length > 1 ? ` + ${sale.items.length - 1} más` : ''}</Text>

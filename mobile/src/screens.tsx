@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Image, Keyboard, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Package, ReceiptText, Search, X } from 'lucide-react-native';
-import { money, reportDateLabel, reportPeriodLabel, saleTime, shortDate, type ReportPeriod, type Screen } from './domain';
-import { BottomNav, CartSheet, CartSummary, DesktopNav, Empty, Kpi, ProductCard, RankRow, SaleRow, SectionTitle, Stat, styles, screenTitle } from './ui';
+import { localDateKey, money, reportDateLabel, reportPeriodLabel, saleTime, shortDate, type ReportPeriod, type Screen } from './domain';
+import { BottomNav, CartSheet, DesktopNav, Empty, Kpi, ProductCard, RankRow, SaleRow, SectionTitle, Stat, styles, screenTitle } from './ui';
 import type { usePapachitoApp } from './usePapachitoApp';
 import type { OfflineSale } from './offline';
 
@@ -40,7 +40,18 @@ export function ProfileSetupScreen({ name, onNameChange, onContinue }: { name: s
 }
 
 export function MainShell({ app }: { app: AppState }) {
-  const { insets,isWide,isNarrow,productCardWidth,booting,hasProfile,setupName,sellerName,settingsName,screen,products,cart,sales,online,apiBase,loadingCatalog,search,category,cartOpen,paymentMethod,reportPeriod,remoteReport,calendarSaleCounts,reportLoading,scannerOpen,searchingServer,lastSyncAt,simpleView,paymentConfig,savedApiBases,addedProductPulse,availableUpdate,updateChecking,updateInstalling,installedVersion,installedVersionCode,pendingCount,cartTotal,categories,searchText,filteredProducts,filteredSales,visibleSales,searchResults,todaySales,todayTotal,reportTotal,reportDays,maxReport,bestDay,topProducts,paymentBreakdown,sellerBreakdown,maxProductTotal,maxPaymentTotal,maxSellerTotal,reportSummary,reportSeries,reportMax,cameraPermission,requestCameraPermission,setSetupName,setSellerName,setSettingsName,setScreen,setProducts,setCart,setSales,setOnline,setApiBaseState,setLoadingCatalog,setSearch,setCategory,setCartOpen,setPaymentMethod,setReportPeriod,setRemoteReport,setReportLoading,setScannerOpen,setSearchingServer,setLastSyncAt,toggleSimpleView,togglePaymentMethod,pickPaymentQr,removePaymentQr,navigateTo,refreshSales,cancelSale,simulateSale,loadCatalog,loadSalesForDate,syncNow,openScanner,connectFromQr,loadReport,continueSetup,saveSettingsName,saveServer,checkForUpdate,installUpdate,addProduct,removeOne,removeProduct,confirmSale,selectSearchResult } = app;
+  const {
+    insets, isWide, isNarrow, productCardWidth, sellerName, settingsName, screen, products, cart, sales, online, apiBase,
+    loadingCatalog, search, category, cartOpen, paymentMethod, reportPeriod, remoteReport, calendarSaleCounts, reportLoading,
+    scannerOpen, searchingServer, lastSyncAt, paymentConfig, savedApiBases, addedProductPulse, availableUpdate, updateChecking,
+    updateInstalling, installedVersion, installedVersionCode, pendingCount, cartTotal, categories, searchText, filteredProducts,
+    filteredSales, visibleSales, searchResults, todaySales, todayTotal, reportTotal, topProducts, paymentBreakdown,
+    sellerBreakdown, maxProductTotal, maxPaymentTotal, maxSellerTotal, reportSummary, reportSeries, reportMax, setSettingsName,
+    setApiBaseState, setSearch, setCategory, setCartOpen, setPaymentMethod, setReportPeriod, setScannerOpen, togglePaymentMethod,
+    pickPaymentQr, removePaymentQr, navigateTo, refreshSales, cancelSale, simulateSale, loadSalesForDate, syncNow, openScanner,
+    connectFromQr, loadReport, saveSettingsName, saveServer, checkForUpdate, installUpdate, addProduct, removeOne, confirmSale,
+    selectSearchResult,
+  } = app;
   const [searchFocused, setSearchFocused] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
@@ -75,13 +86,20 @@ export function MainShell({ app }: { app: AppState }) {
   const calendarDaysInMonth = new Date(calendarYear, calendarMonthIndex + 1, 0).getDate();
   const calendarStartOffset = (new Date(calendarYear, calendarMonthIndex, 1).getDay() + 6) % 7;
   const calendarCells: Array<number | null> = [...Array(calendarStartOffset).fill(null), ...Array.from({ length: calendarDaysInMonth }, (_, index) => index + 1)];
-  const calendarCounts = { ...calendarSaleCounts, ...Object.fromEntries(sales.map((sale) => [sale.createdAt.slice(0, 10), Math.max(calendarSaleCounts[sale.createdAt.slice(0, 10)] || 0, 1)])) };
+  const localCalendarCounts = useMemo(() => sales.reduce<Record<string, number>>((counts, sale) => {
+    const date = localDateKey(sale.createdAt);
+    if (date) counts[date] = (counts[date] || 0) + 1;
+    return counts;
+  }, {}), [sales]);
+  const calendarCounts = useMemo(() => Object.entries(localCalendarCounts).reduce((counts, [date, count]) => {
+    counts[date] = Math.max(calendarSaleCounts[date] || 0, count);
+    return counts;
+  }, { ...calendarSaleCounts }), [calendarSaleCounts, localCalendarCounts]);
   const calendarMonthLabel = calendarMonth.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const historyToday = visibleSales.filter((sale) => sale.createdAt.slice(0, 10) === todayKey && sale.status === 'synced');
+  const todayKey = localDateKey(new Date());
+  const historyToday = visibleSales.filter((sale) => localDateKey(sale.createdAt) === todayKey && sale.status === 'synced');
   const historyPending = visibleSales.filter((sale) => sale.status !== 'synced');
-  const historyOlder = visibleSales.filter((sale) => sale.createdAt.slice(0, 10) !== todayKey && sale.status === 'synced');
-  const historyPreview = [...historyToday, ...historyPending, ...historyOlder].slice(0, 5);
+  const historyOlder = visibleSales.filter((sale) => localDateKey(sale.createdAt) !== todayKey && sale.status === 'synced');
   const openReportDay = async (date: string) => {
     setSelectedDay(date);
     setSelectedDaySales([]);
@@ -114,7 +132,7 @@ export function MainShell({ app }: { app: AppState }) {
               <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder={screen === 'history' ? 'Buscar producto, vendedor o fecha' : screen === 'report' ? 'Buscar en reportes' : 'Buscar producto o boleta'}
+            placeholder={screen === 'history' ? 'Buscar producto, vendedor o fecha' : screen === 'report' ? 'Buscar en reportes' : 'Buscar producto o venta'}
             style={styles.searchInput}
             placeholderTextColor="#89918c"
             selectionColor="#174f42"
@@ -146,7 +164,7 @@ export function MainShell({ app }: { app: AppState }) {
                 <Search size={21} color="#7b8580" />
                 <View style={styles.searchEmptyCopy}>
                   <Text style={styles.searchEmptyTitle}>Prueba con otro nombre o monto</Text>
-                  <Text style={styles.searchEmptyText}>La búsqueda solo muestra productos y boletas.</Text>
+                  <Text style={styles.searchEmptyText}>La búsqueda solo muestra productos y ventas.</Text>
                 </View>
               </View>
             ) : (
@@ -160,7 +178,7 @@ export function MainShell({ app }: { app: AppState }) {
                     <Text style={styles.resultSubtitle} numberOfLines={1}>{result.subtitle}</Text>
                   </View>
                   <View style={[styles.resultTag, result.type === 'sale' && styles.resultTagSale]}>
-                    <Text style={[styles.resultTagText, result.type === 'sale' && styles.resultTagTextSale]}>{result.type === 'product' ? 'Producto' : 'Boleta'}</Text>
+                    <Text style={[styles.resultTagText, result.type === 'sale' && styles.resultTagTextSale]}>{result.type === 'product' ? 'Producto' : 'Venta'}</Text>
                   </View>
                 </Pressable>
               ))
@@ -197,7 +215,7 @@ export function MainShell({ app }: { app: AppState }) {
                 <Empty title="No hay productos" copy="Limpia la busqueda o cambia de categoria." />
               ) : (
                 <View style={styles.productGrid}>
-                  {filteredProducts.slice(0, productRenderLimit).map((item) => <ProductCard key={String(item.id)} item={item} width={productCardWidth} simpleView={simpleView} highlighted={addedProductPulse.startsWith(`${String(item.id)}-`)} onPress={addProduct} />)}
+                  {filteredProducts.slice(0, productRenderLimit).map((item) => <ProductCard key={String(item.id)} item={item} width={productCardWidth} highlighted={addedProductPulse.startsWith(`${String(item.id)}-`)} onPress={addProduct} />)}
                 </View>
               )}
             </View>
@@ -212,7 +230,7 @@ export function MainShell({ app }: { app: AppState }) {
             </View>
             <SectionTitle eyebrow="ACTIVIDAD" title="Historial" right="Actualizar" onRight={refreshSales} />
             {filteredSales.length === 0 ? (
-              <Empty title={searchText ? 'Sin boletas' : 'No hay ventas'} copy={searchText ? 'No hay historial que coincida con la busqueda.' : 'Las ventas guardadas apareceran aqui.'} />
+              <Empty title={searchText ? 'Sin ventas' : 'No hay ventas'} copy={searchText ? 'No hay historial que coincida con la busqueda.' : 'Las ventas guardadas apareceran aqui.'} />
             ) : (
               <View style={styles.historySections}>
                 {historyToday.length ? <View style={styles.historySection}><SectionTitle compact eyebrow="HOY" title={`${historyToday.length} venta${historyToday.length === 1 ? '' : 's'}`} /><SaleRow key={historyToday[0].id} sale={historyToday[0]} onPress={() => setSelectedSale(historyToday[0])} onDelete={() => cancelSale(historyToday[0])} /></View> : null}
@@ -294,7 +312,7 @@ export function MainShell({ app }: { app: AppState }) {
                 <Text style={styles.muted}>Desde {remoteReport?.historical?.firstDate ? reportDateLabel(remoteReport.historical.firstDate, 'mes') : 'el inicio'} hasta {remoteReport?.historical?.lastDate ? reportDateLabel(remoteReport.historical.lastDate, 'mes') : 'hoy'}.</Text>
                 <View style={styles.historicalRow}>
                   <Stat label="Total histórico" value={money(remoteReport?.historical?.total ?? reportTotal)} />
-                  <Stat label="Boletas" value={String(remoteReport?.historical?.count ?? filteredSales.length)} />
+                  <Stat label="Ventas" value={String(remoteReport?.historical?.count ?? filteredSales.length)} />
                 </View>
               </View>
               <View style={[styles.panelLarge, isNarrow && styles.panelLargeMobile]}>
@@ -500,7 +518,7 @@ export function MainShell({ app }: { app: AppState }) {
           <View style={styles.dayModalCard}>
             <View style={styles.dayModalHeader}>
               <View style={styles.dayModalHeaderCopy}>
-                <Text style={styles.eyebrow}>DETALLE DE BOLETA</Text>
+                <Text style={styles.eyebrow}>DETALLE DE VENTA</Text>
                 <Text style={styles.dayModalTitle} numberOfLines={1}>{reportDateLabel(selectedSale.createdAt, 'dia')}</Text>
                 <Text style={styles.muted}>{saleTime(selectedSale.createdAt)} · {selectedSale.seller}</Text>
               </View>
@@ -552,7 +570,7 @@ export function MainShell({ app }: { app: AppState }) {
 
       {cartOpen ? <>
         <Pressable accessibilityLabel="Cerrar pedido" onPress={() => setCartOpen(false)} style={styles.sheetBackdrop} />
-        <CartSheet cart={cart} total={cartTotal} paymentMethod={paymentMethod} simpleView={simpleView} paymentConfig={paymentConfig} onPaymentMethod={setPaymentMethod} safeBottom={insets.bottom} onClose={() => setCartOpen(false)} onAdd={addProduct} onRemoveOne={removeOne} onRemove={removeProduct} onConfirm={confirmSale} />
+        <CartSheet cart={cart} total={cartTotal} paymentMethod={paymentMethod} paymentConfig={paymentConfig} onPaymentMethod={setPaymentMethod} safeBottom={insets.bottom} onClose={() => setCartOpen(false)} onAdd={addProduct} onRemoveOne={removeOne} onConfirm={confirmSale} />
       </> : null}
       {scannerOpen ? (
         <View style={styles.scannerOverlay}>
