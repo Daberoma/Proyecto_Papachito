@@ -1,5 +1,8 @@
 import express from 'express';
 import cors from 'cors';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PORT } from './src/config.js';
 import { pool } from './src/db/pool.js';
 import { stableUuid } from './src/utils/stableUuid.js';
@@ -8,9 +11,104 @@ import { catalogRouter } from './src/routes/catalog.routes.js';
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '4mb' }));
 app.use(healthRouter());
 app.use(catalogRouter());
+
+const qrMethods = new Set(['yape', 'plin', 'bbva']);
+const qrStorageDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'storage', 'payment-qr');
+const qrMimeExtensions = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+
+function normalizeQrMethod(value) {
+  const method = String(value || '').trim().toLowerCase();
+  return qrMethods.has(method) ? method : '';
+}
+
+function parseQrData(data, mimeType) {
+  const raw = String(data || '');
+  const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/i);
+  const mime = String(mimeType || match?.[1] || '').toLowerCase();
+  const base64 = (match?.[2] || raw).replace(/\s/g, '');
+  if (!qrMimeExtensions[mime] || !/^[A-Za-z0-9+/]*={0,2}$/.test(base64) || !base64) return null;
+  const buffer = Buffer.from(base64, 'base64');
+  if (!buffer.length || buffer.length > 2 * 1024 * 1024) return null;
+  return { buffer, mime, extension: qrMimeExtensions[mime] };
+}
+
+async function removeStoredQr(fileName) {
+  if (!fileName) return;
+  await fs.unlink(path.join(qrStorageDir, path.basename(fileName))).catch(() => {});
+}
+
+app.get('/api/config/medios-pago', async (_req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT method, mime_type, version, updated_at
+       FROM payment_qr_config ORDER BY method`,
+    );
+    res.json({
+      ok: true,
+      qrs: result.rows.map((row) => ({
+        method: row.method,
+        mimeType: row.mime_type,
+        version: String(row.version),
+        updatedAt: row.updated_at,
+        url: `/api/config/medios-pago/${row.method}/qr`,
+      })),
+    });
+  } catch (error) { next(error); }
+});
+
+app.get('/api/config/medios-pago/:method/qr', async (req, res, next) => {
+  try {
+    const method = normalizeQrMethod(req.params.method);
+    if (!method) return res.status(400).json({ ok: false, message: 'Medio de pago no válido' });
+    const result = await pool.query('SELECT file_name, mime_type, version FROM payment_qr_config WHERE method=$1', [method]);
+    if (!result.rowCount) return res.status(404).json({ ok: false, message: 'QR no configurado' });
+    const file = await fs.readFile(path.join(qrStorageDir, path.basename(result.rows[0].file_name)));
+    res.setHeader('Content-Type', result.rows[0].mime_type);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('ETag', `"${result.rows[0].version}"`);
+    return res.send(file);
+  } catch (error) { return next(error); }
+});
+
+app.put('/api/config/medios-pago/:method/qr', async (req, res, next) => {
+  try {
+    const method = normalizeQrMethod(req.params.method);
+    const image = parseQrData(req.body?.data, req.body?.mimeType);
+    if (!method || !image) return res.status(422).json({ ok: false, message: 'Imagen QR no válida' });
+    await fs.mkdir(qrStorageDir, { recursive: true });
+    const fileName = `${method}-${Date.now()}.${image.extension}`;
+    await fs.writeFile(path.join(qrStorageDir, fileName), image.buffer);
+    const previous = await pool.query('SELECT file_name FROM payment_qr_config WHERE method=$1', [method]);
+    const version = Date.now();
+    try {
+      await pool.query(
+        `INSERT INTO payment_qr_config(method,file_name,mime_type,version,updated_at)
+         VALUES($1,$2,$3,$4,CURRENT_TIMESTAMP)
+         ON CONFLICT(method) DO UPDATE SET file_name=EXCLUDED.file_name,
+           mime_type=EXCLUDED.mime_type, version=EXCLUDED.version, updated_at=CURRENT_TIMESTAMP`,
+        [method, fileName, image.mime, version],
+      );
+    } catch (error) {
+      await removeStoredQr(fileName);
+      throw error;
+    }
+    if (previous.rows[0]?.file_name && previous.rows[0].file_name !== fileName) await removeStoredQr(previous.rows[0].file_name);
+    res.json({ ok: true, method, version: String(version), url: `/api/config/medios-pago/${method}/qr` });
+  } catch (error) { next(error); }
+});
+
+app.delete('/api/config/medios-pago/:method/qr', async (req, res, next) => {
+  try {
+    const method = normalizeQrMethod(req.params.method);
+    if (!method) return res.status(400).json({ ok: false, message: 'Medio de pago no válido' });
+    const result = await pool.query('DELETE FROM payment_qr_config WHERE method=$1 RETURNING file_name', [method]);
+    if (result.rows[0]?.file_name) await removeStoredQr(result.rows[0].file_name);
+    res.json({ ok: true, removed: Boolean(result.rowCount) });
+  } catch (error) { next(error); }
+});
 
 app.post('/api/config/productos', async (req, res) => {
   const name = String(req.body.name || '').trim();

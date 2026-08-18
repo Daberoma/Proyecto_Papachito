@@ -6,6 +6,7 @@ const API_KEY='papachito.api.base';
 const API_HISTORY_KEY='papachito.api.history';
 const CATALOG_KEY='papachito.catalog';
 const PAYMENT_CONFIG_KEY='papachito.payment.config';
+const PAYMENT_QR_DELETES_KEY='papachito.payment.qr.pending-deletes';
 export type PaymentMethodKey='yape'|'plin'|'bbva';
 export type PaymentConfig={
  yapeEnabled:boolean;
@@ -14,6 +15,9 @@ export type PaymentConfig={
  yapeQrUri?:string;
  plinQrUri?:string;
  bbvaQrUri?:string;
+ yapeQrVersion?:string;
+ plinQrVersion?:string;
+ bbvaQrVersion?:string;
 };
 export async function getSales():Promise<OfflineSale[]>{try{return JSON.parse(await AsyncStorage.getItem(SALES_KEY)||'[]')}catch{return[]}}
 export async function queueSale(s:OfflineSale){const all=await getSales();all.push(s);await AsyncStorage.setItem(SALES_KEY,JSON.stringify(all));return all}
@@ -29,6 +33,9 @@ export async function getPaymentConfig():Promise<PaymentConfig>{
  try{return {...{yapeEnabled:true,plinEnabled:false,bbvaEnabled:false},...JSON.parse(await AsyncStorage.getItem(PAYMENT_CONFIG_KEY)||'{}')}}catch{return {yapeEnabled:true,plinEnabled:false,bbvaEnabled:false}}
 }
 export async function setPaymentConfig(value:PaymentConfig){await AsyncStorage.setItem(PAYMENT_CONFIG_KEY,JSON.stringify(value))}
+export async function getPendingPaymentQrDeletes():Promise<PaymentMethodKey[]>{try{return JSON.parse(await AsyncStorage.getItem(PAYMENT_QR_DELETES_KEY)||'[]')}catch{return[]}}
+export async function addPendingPaymentQrDelete(method:PaymentMethodKey){const all=await getPendingPaymentQrDeletes();if(!all.includes(method))await AsyncStorage.setItem(PAYMENT_QR_DELETES_KEY,JSON.stringify([...all,method]))}
+export async function removePendingPaymentQrDelete(method:PaymentMethodKey){const all=await getPendingPaymentQrDeletes();await AsyncStorage.setItem(PAYMENT_QR_DELETES_KEY,JSON.stringify(all.filter((item)=>item!==method)))}
 export async function getCatalog<T=any[]>():Promise<T>{try{return JSON.parse(await AsyncStorage.getItem(CATALOG_KEY)||'[]')}catch{return [] as T}}
 export async function setCatalog(value:any[]){await AsyncStorage.setItem(CATALOG_KEY,JSON.stringify(value))}
 export async function detectApiBase(candidates:string[], timeoutMs = 900):Promise<string>{

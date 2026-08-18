@@ -2,7 +2,7 @@
   "expo": {
     "name": "Donde Papachito",
     "slug": "donde-papachito",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "scheme": "papachito",
     "orientation": "default",
     "icon": "./icon.png",

@@ -14,6 +14,7 @@ bitacora.md
 **/attachments/
 **/.codex-remote-attachments/
 database/dumps/
+database-papachito/
 *.dump
 *.backup
 *.sql.gz

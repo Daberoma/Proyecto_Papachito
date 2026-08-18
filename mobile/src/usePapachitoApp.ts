@@ -5,7 +5,7 @@ import { useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getSales,getApiBase,getApiBases,getCatalog,getSeller,getPaymentConfig,queueSale,removeSale,setSeller,setApiBase,setPaymentConfig,setCatalog,discoverApiBase,detectApiBase,syncPendingSales,type OfflineSale,type PaymentConfig,type PaymentMethodKey } from './offline';
+import { getSales,getApiBase,getApiBases,getCatalog,getSeller,getPaymentConfig,queueSale,removeSale,setSeller,setApiBase,setPaymentConfig,setCatalog,discoverApiBase,detectApiBase,syncPendingSales,getPendingPaymentQrDeletes,addPendingPaymentQrDelete,removePendingPaymentQrDelete,type OfflineSale,type PaymentConfig,type PaymentMethodKey } from './offline';
 import { API,apiCandidates,classifyProduct,fallbackProducts,localDateKey,money,productSearchText,saleSearchText,saleTime,type CartItem,type Product,type RemoteReport,type ReportPeriod,type Screen,type SearchResult } from './domain';
 import { checkGithubApkUpdate, downloadAndOpenGithubApk, installedVersion, installedVersionCode, type GithubApkUpdate } from './githubApkUpdate';
 
@@ -24,6 +24,8 @@ const mergeSales = (local: OfflineSale[], remote: OfflineSale[]) => {
   const localIds = new Set(local.map((sale) => sale.remoteUuid || sale.id));
   return [...local, ...remote.filter((sale) => !localIds.has(sale.remoteUuid || sale.id))];
 };
+
+const qrMimeFromUri = (uri: string) => uri.toLowerCase().includes('.png') ? 'image/png' : uri.toLowerCase().includes('.webp') ? 'image/webp' : 'image/jpeg';
 
 export function usePapachitoApp() {
   const { width } = useWindowDimensions();
@@ -376,6 +378,70 @@ export function usePapachitoApp() {
     }
   }, [refreshSales]);
 
+  const syncPaymentQrs = useCallback(async (base: string) => {
+    if (!base) return;
+    try {
+      const pendingDeletes = await getPendingPaymentQrDeletes();
+      for (const method of pendingDeletes) {
+        const response = await fetch(`${base}/api/config/medios-pago/${method}/qr`, { method: 'DELETE', signal: AbortSignal.timeout(3000) });
+        if (response.ok) await removePendingPaymentQrDelete(method);
+      }
+
+      const response = await fetch(`${base}/api/config/medios-pago`, { signal: AbortSignal.timeout(3500) });
+      if (!response.ok) return;
+      const payload = await response.json();
+      if (!payload.ok || !Array.isArray(payload.qrs)) return;
+
+      const current = await getPaymentConfig();
+      const next = { ...current } as PaymentConfig;
+      let changed = false;
+      const methods: PaymentMethodKey[] = ['yape', 'plin', 'bbva'];
+      for (const method of methods) {
+        const uriKey = `${method}QrUri` as 'yapeQrUri' | 'plinQrUri' | 'bbvaQrUri';
+        const versionKey = `${method}QrVersion` as 'yapeQrVersion' | 'plinQrVersion' | 'bbvaQrVersion';
+        const remote = payload.qrs.find((item: any) => item.method === method);
+        const localUri = next[uriKey];
+        const localInfo = localUri ? await FileSystem.getInfoAsync(localUri) : null;
+
+        if (remote) {
+          if (localUri && localInfo?.exists && next[versionKey] === String(remote.version)) continue;
+          const extension = String(remote.mimeType || '').includes('png') ? 'png' : String(remote.mimeType || '').includes('webp') ? 'webp' : 'jpg';
+          const target = `${FileSystem.documentDirectory}papachito-${method}-qr-cache.${extension}`;
+          const downloaded = await FileSystem.downloadAsync(`${base}${remote.url}`, target);
+          if (localUri && localUri !== downloaded.uri && localUri.startsWith(String(FileSystem.documentDirectory || ''))) {
+            await FileSystem.deleteAsync(localUri, { idempotent: true }).catch(() => {});
+          }
+          next[uriKey] = downloaded.uri;
+          next[versionKey] = String(remote.version);
+          changed = true;
+        } else if (localUri && localInfo?.exists) {
+          const encoded = await FileSystem.readAsStringAsync(localUri, { encoding: 'base64' as any });
+          const upload = await fetch(`${base}/api/config/medios-pago/${method}/qr`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: `data:${qrMimeFromUri(localUri)};base64,${encoded}`, mimeType: qrMimeFromUri(localUri) }),
+            signal: AbortSignal.timeout(5000),
+          });
+          if (upload.ok) {
+            const uploaded = await upload.json();
+            next[versionKey] = String(uploaded.version || '');
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        setPaymentConfigState(next);
+        await setPaymentConfig(next);
+      }
+    } catch {
+      // El QR local sigue disponible aunque el servidor esté apagado.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (online && apiBase) void syncPaymentQrs(apiBase);
+  }, [apiBase, online, syncPaymentQrs]);
+
   const openScanner = async () => {
     if (!cameraPermission?.granted) {
       const permission = await requestCameraPermission();
@@ -408,6 +474,7 @@ export function usePapachitoApp() {
       await setApiBase(api);
       setSavedApiBases(await getApiBases());
       await loadCatalog(api);
+      await syncPaymentQrs(api);
       await syncNow();
       Alert.alert('Conectado', 'Servidor guardado y sincronización iniciada.');
     } catch (error: any) {
@@ -670,27 +737,68 @@ export function usePapachitoApp() {
     let uri = pickedUri;
     try {
       const extension = pickedUri.split('.').pop()?.split('?')[0] || 'jpg';
-      const target = `${FileSystem.documentDirectory}papachito-${method}-qr.${extension}`;
+      const target = `${FileSystem.documentDirectory}papachito-${method}-qr-local.${extension}`;
       await FileSystem.copyAsync({ from: pickedUri, to: target });
       uri = target;
     } catch {
       // Si el proveedor de galería no permite copiar, conservamos la URI elegida.
     }
+    const previous = (await getPaymentConfig())[`${method}QrUri` as 'yapeQrUri' | 'plinQrUri' | 'bbvaQrUri'];
+    if (previous && previous !== uri && previous.startsWith(String(FileSystem.documentDirectory || ''))) {
+      await FileSystem.deleteAsync(previous, { idempotent: true }).catch(() => {});
+    }
+    await removePendingPaymentQrDelete(method);
     setPaymentConfigState((current) => {
-      const next = { ...current, [`${method}QrUri`]: uri } as PaymentConfig;
+      const next = { ...current, [`${method}QrUri`]: uri, [`${method}QrVersion`]: undefined } as PaymentConfig;
       void setPaymentConfig(next);
       return next;
     });
-  }, []);
+    if (apiBase) {
+      void (async () => {
+        try {
+          const encoded = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' as any });
+          const mimeType = qrMimeFromUri(uri);
+          const upload = await fetch(`${apiBase}/api/config/medios-pago/${method}/qr`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: `data:${mimeType};base64,${encoded}`, mimeType }),
+            signal: AbortSignal.timeout(5000),
+          });
+          if (!upload.ok) return;
+          const payload = await upload.json();
+          setPaymentConfigState((current) => {
+            const next = { ...current, [`${method}QrVersion`]: String(payload.version || '') } as PaymentConfig;
+            void setPaymentConfig(next);
+            return next;
+          });
+        } catch {
+          // Se reintentará en segundo plano cuando vuelva la conexión.
+        }
+      })();
+    }
+  }, [apiBase]);
 
   const removePaymentQr = useCallback(async (method: PaymentMethodKey) => {
+    const current = await getPaymentConfig();
+    const uri = current[`${method}QrUri` as 'yapeQrUri' | 'plinQrUri' | 'bbvaQrUri'];
+    if (uri && uri.startsWith(String(FileSystem.documentDirectory || ''))) await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+    await addPendingPaymentQrDelete(method);
     setPaymentConfigState((current) => {
       const next = { ...current } as PaymentConfig;
       delete next[`${method}QrUri` as 'yapeQrUri' | 'plinQrUri' | 'bbvaQrUri'];
+      delete next[`${method}QrVersion` as 'yapeQrVersion' | 'plinQrVersion' | 'bbvaQrVersion'];
       void setPaymentConfig(next);
       return next;
     });
-  }, []);
+    if (apiBase) {
+      try {
+        const response = await fetch(`${apiBase}/api/config/medios-pago/${method}/qr`, { method: 'DELETE', signal: AbortSignal.timeout(3500) });
+        if (response.ok) await removePendingPaymentQrDelete(method);
+      } catch {
+        // La eliminación queda en cola hasta recuperar la conexión.
+      }
+    }
+  }, [apiBase]);
 
   return {
     insets, isWide, isNarrow, productCardWidth, booting, hasProfile, setupName, sellerName, settingsName, screen, products, cart, sales,
