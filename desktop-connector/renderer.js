@@ -8,6 +8,9 @@ function setCheck(prefix, good) {
 }
 
 const readState = window.papachitoConnector?.readState || (() => fetch('/state').then((response) => response.json()));
+const openSystem = window.papachitoConnector?.openSystem || (() => fetch('/open-system', { method: 'POST' }).then((response) => {
+  if (!response.ok) throw new Error('No se pudo abrir la ventana.');
+}));
 
 async function refresh() {
   $('retry').disabled = true;
@@ -30,6 +33,10 @@ async function refresh() {
     $('device-state').textContent = devices.length ? 'Conectado' : 'Esperando';
     $('device-state').className = devices.length ? 'good-text' : '';
     $('devices-panel').hidden = devices.length === 0;
+    const systemButton = $('open-system');
+    systemButton.classList.toggle('waiting', devices.length === 0);
+    systemButton.classList.toggle('connected', devices.length > 0);
+    systemButton.title = devices.length ? 'Teléfono conectado: abrir sistema en PC' : 'Abrir sistema en PC sin teléfono conectado';
     $('device-count').textContent = String(devices.length);
     $('device-list').innerHTML = devices.map((device, index) => `<div class="device-item"><span class="device-dot"></span><div><strong>${device.device || `Teléfono ${index + 1}`}</strong><small>${device.ip || 'Red local'} · activo ahora</small></div><b>Conectado</b></div>`).join('');
     $('address').textContent = state.host ? `${state.host}  ·  API ${state.apiBase.split(':').pop()}  ·  Web ${state.webUrl.split(':').pop()}` : 'Conecta esta computadora a una Wi‑Fi o Ethernet';
@@ -55,8 +62,7 @@ $('open-system').addEventListener('click', async () => {
   button.disabled = true;
   button.textContent = 'Abriendo sistema…';
   try {
-    const response = await fetch('/open-system', { method: 'POST' });
-    if (!response.ok) throw new Error('No se pudo abrir la ventana.');
+    await openSystem();
     $('message').textContent = 'El sistema se abrió en una ventana independiente de Papachito.';
   } catch {
     $('message').textContent = 'No se pudo abrir el sistema. Revisa que el panel de computadora esté listo.';

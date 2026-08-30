@@ -111,7 +111,10 @@ export function usePapachitoApp() {
   const filteredProducts = useMemo(() => {
     return products.filter((item) => {
       const matchesText = !searchText || productSearchText(item).includes(searchText);
-      const matchesCategory = category === 'Todo' || (item.category || 'Otros') === category;
+      // Una búsqueda debe mostrar todas las coincidencias, aunque antes se
+      // haya elegido una categoría distinta. Al limpiar la búsqueda se
+      // conserva el filtro de categoría que el vendedor tenía seleccionado.
+      const matchesCategory = Boolean(searchText) || category === 'Todo' || (item.category || 'Otros') === category;
       return matchesText && matchesCategory;
     });
   }, [category, products, searchText]);
@@ -145,7 +148,11 @@ export function usePapachitoApp() {
     return [...productResults, ...saleResults].slice(0, 8);
   }, [products, sales, searchText]);
 
-  const visibleSales = useMemo(() => filteredSales.slice().reverse(), [filteredSales]);
+  const visibleSales = useMemo(() => filteredSales.slice().sort((left, right) => {
+    const leftTime = Date.parse(left.createdAt) || 0;
+    const rightTime = Date.parse(right.createdAt) || 0;
+    return rightTime - leftTime;
+  }), [filteredSales]);
   const todaySales = useMemo(() => {
     const today = localDateKey(new Date());
     return sales.filter((sale) => localDateKey(sale.createdAt) === today);
@@ -745,6 +752,13 @@ export function usePapachitoApp() {
     }
   }, [hasProfile, loadReport, refreshSales, reportOrigin, reportPeriod, screen]);
 
+  useEffect(() => {
+    if (screen !== 'history' || !hasProfile) return;
+    void refreshSales();
+    const timer = setInterval(() => { void refreshSales(); }, 10000);
+    return () => clearInterval(timer);
+  }, [hasProfile, refreshSales, screen]);
+
   const continueSetup = async () => {
     const name = setupName.trim();
     if (!name) {
@@ -930,12 +944,13 @@ export function usePapachitoApp() {
   const selectSearchResult = (result: SearchResult) => {
     if (result.type === 'product') {
       setScreen('sale');
+      setCategory('Todo');
       addProduct(result.product);
     } else {
       setScreen('history');
       setCartOpen(false);
+      setSearch('');
     }
-    setSearch('');
   };
 
   useEffect(() => {

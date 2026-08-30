@@ -424,3 +424,49 @@ Formato compacto: fecha · movimiento · evidencia · siguiente acción.
 - Se alinearon las dependencias al SDK 57 de Expo (`expo-doctor`: 21/21 comprobaciones), y la exportación Android limpia terminó correctamente.
 - El actualizador Android ahora valida que los bytes descargados coincidan con el tamaño publicado por GitHub antes de abrir el instalador. La siguiente versión queda preparada como `0.1.4` / código 4, usando la versión local del proyecto como fuente única para EAS.
 - Build EAS `0.1.4` / código 4 y Release pública [`v0.1.4`](https://github.com/Daberoma/Proyecto_Papachito/releases/tag/v0.1.4) verificados tras descargarlos desde GitHub: tamaño 120,360,663 bytes, ZIP íntegro y firma APK v2 con el mismo certificado de las versiones previas.
+
+## 2026-08-29 — activación local del clon de Papachito
+
+- Se clonó `Daberoma/Proyecto_Papachito` en una carpeta local nueva, conservando el árbol Git limpio y sin incorporar datos privados al repositorio.
+- Se instalaron desde sus lockfiles las dependencias de `backend-node`, `mobile` y `desktop-connector`; `node --check backend-node/server.js` y `npx tsc --noEmit` finalizaron correctamente.
+- Se comprobó la conexión a `papachito_app` y la existencia de las tablas operativas de catálogo, stock, ventas, pagos, movimientos y auditoría, sin consultar ni registrar datos privados.
+- Se generó la exportación web local `mobile/dist` y se verificaron HTTP 200 para API (8090), web (8091) y Conector (8188). La prueba desde un teléfono en la misma Wi-Fi queda pendiente.
+- Se detectó que el catálogo requería tablas estructurales aún no aplicadas; se ejecutaron `04-product-images.sql`, `05-product-presentations.sql` y `07-product-groups.sql`. Después, `/api/catalogo` volvió a responder HTTP 200 con 340 productos activos, también desde la IP LAN.
+
+## 2026-08-29 — retiro de lanzadores heredados
+
+- Se retiraron del clon los lanzadores heredados `start-papachito-console.cmd`, `start-papachito-windowless.ps1` y `start-papachito-background.ps1`, que podían iniciar el flujo anterior o apagar servicios al cerrar la ventana.
+- Se detuvo el proceso PHP/Laragon heredado que ocupaba el puerto 8088; no se borró Laravel, Laragon ni MySQL.
+- El único lanzador operativo queda como `start-papachito-api.cmd`, que deriva al flujo actual `start-papachito-all.ps1`. API (8090), web (8091) y conector (8188) se mantuvieron en HTTP 200 tras el cambio.
+
+## 2026-08-30 — arranque automático local
+
+- PostgreSQL quedó comprobado como servicio de Windows con inicio automático.
+- El lanzador del Inicio de Windows se actualizó para ejecutar `start-papachito-windowless.vbs` de este clon, que inicia PostgreSQL, API, web y conector sin consola visible al entrar a Windows.
+- API, web y conector se verificaron en HTTP 200 después de configurar el arranque.
+- La tarea heredada y dos accesos heredados de Inicio requieren una ejecución elevada para retirarlos, porque Windows denegó modificar esa configuración desde la sesión actual.
+
+## 2026-08-30 — acceso al sistema independiente del QR
+
+- El botón `Abrir sistema en PC` del Conector queda siempre visible y habilitado: rojo mientras no haya teléfono conectado y verde cuando exista al menos un dispositivo activo.
+- El botón abre el panel de computadora aunque el QR todavía no se haya escaneado; la conexión de teléfonos permanece como estado informativo, no como bloqueo.
+- Se aplicó el mismo comportamiento tanto al conector web como al conector Electron. Validación: comprobaciones sintácticas de Node, TypeScript, `git diff --check`, conector HTTP 200 y acción de apertura HTTP 202.
+
+## 2026-08-30 — acceso directo de Escritorio
+
+- Se creó `Donde Papachito.lnk` en el Escritorio con el icono oficial de la aplicación.
+- El acceso inicia `start-papachito-windowless.vbs`, por lo que conserva el arranque silencioso de PostgreSQL, API, panel web y conector.
+- Se reemplazó el ICO inicial por un ICO estándar multirresolución generado desde el logo oficial y se actualizó la caché de iconos de Windows.
+
+## 2026-08-30 — Conector compacto y ventanas maximizadas
+
+- El Conector ya no muestra desplazamiento: centra el contenido, reduce el QR, compacta los estados en una cuadrícula y adapta aún más el espacio en pantallas bajas.
+- El Conector se abre maximizado desde el lanzador web y Electron; la acción `Abrir sistema en PC` también abre el panel maximizado.
+- Validación: comprobaciones sintácticas de Node y `git diff --check` correctas; el conector se reinició y respondió HTTP 200 con API y web disponibles.
+- Corrección posterior: el botón `Abrir sistema en PC` se colocó antes del panel de dispositivos para que el panel visible tras escanear el QR no pueda sacarlo de pantalla. Se verificó con un teléfono conectado.
+
+## 2026-08-30 — selección de resultados en Vender
+
+- Al tocar un producto en el buscador, ahora se agrega al carrito sin borrar el texto escrito; el panel de resultados se cierra y el catálogo deja visibles todas las coincidencias relacionadas bajo la búsqueda.
+- La búsqueda ignora temporalmente el chip de categoría para no ocultar coincidencias relacionadas; al limpiar el texto vuelve a respetar la categoría seleccionada.
+- Se añadió una pequeña demora al perder foco para que el toque sobre un resultado no se cancele antes de registrarse. TypeScript y la exportación web pasaron; el panel web respondió HTTP 200 con el bundle regenerado.

@@ -171,7 +171,7 @@ export function MainShell({ app }: { app: AppState }) {
             autoCorrect={false}
             returnKeyType="search"
             onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
+            onBlur={() => setTimeout(() => setSearchFocused(false), 120)}
           />
           {search ? (
             <Pressable accessibilityLabel="Limpiar búsqueda" onPress={() => setSearch('')} style={({ pressed }) => [styles.clearButton, pressed && styles.buttonPressed]}>
@@ -199,7 +199,13 @@ export function MainShell({ app }: { app: AppState }) {
               </View>
             ) : (
               searchResults.map((result, index) => (
-                <Pressable key={`${result.type}-${index}`} onPress={() => selectSearchResult(result)} style={({ pressed }) => [styles.resultRow, pressed && styles.resultRowPressed]}>
+                <Pressable key={`${result.type}-${index}`} onPress={() => {
+                  selectSearchResult(result);
+                  if (result.type === 'product') {
+                    Keyboard.dismiss();
+                    setSearchFocused(false);
+                  }
+                }} style={({ pressed }) => [styles.resultRow, pressed && styles.resultRowPressed]}>
                   <View style={[styles.resultIcon, result.type === 'sale' && styles.resultIconSale]}>
                     {result.type === 'product' ? <Package size={18} color="#174f42" /> : <ReceiptText size={18} color="#315b91" />}
                   </View>

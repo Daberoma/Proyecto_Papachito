@@ -16,4 +16,4 @@ $browsers = @(
 ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
 if (-not $browsers) { throw 'No se encontró Edge, Chrome o Brave.' }
 $profile = Join-Path $env:TEMP 'Papachito-conector-window'
-Start-Process -FilePath $browsers[0] -ArgumentList @('--app=http://127.0.0.1:8188/','--new-window',"--user-data-dir=$profile") | Out-Null
+Start-Process -FilePath $browsers[0] -ArgumentList @('--app=http://127.0.0.1:8188/','--new-window','--start-maximized',"--user-data-dir=$profile") | Out-Null

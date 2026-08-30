@@ -50,7 +50,7 @@ function openSystemWindow() {
   ].filter(existsSync);
   if (!browsers.length) throw new Error('No se encontró un navegador compatible.');
   const profile = path.join(os.tmpdir(), 'Papachito-system-window');
-  const child = spawn(browsers[0], ['--app=http://127.0.0.1:8091/', '--new-window', `--user-data-dir=${profile}`], { detached: true, stdio: 'ignore' });
+  const child = spawn(browsers[0], ['--app=http://127.0.0.1:8091/', '--new-window', '--start-maximized', `--user-data-dir=${profile}`], { detached: true, stdio: 'ignore' });
   child.unref();
 }
 
