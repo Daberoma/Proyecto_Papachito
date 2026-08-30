@@ -470,3 +470,9 @@ Formato compacto: fecha · movimiento · evidencia · siguiente acción.
 - Al tocar un producto en el buscador, ahora se agrega al carrito sin borrar el texto escrito; el panel de resultados se cierra y el catálogo deja visibles todas las coincidencias relacionadas bajo la búsqueda.
 - La búsqueda ignora temporalmente el chip de categoría para no ocultar coincidencias relacionadas; al limpiar el texto vuelve a respetar la categoría seleccionada.
 - Se añadió una pequeña demora al perder foco para que el toque sobre un resultado no se cancele antes de registrarse. TypeScript y la exportación web pasaron; el panel web respondió HTTP 200 con el bundle regenerado.
+
+## 2026-08-30 — historial móvil sincronizado y ordenado
+
+- Historial ahora vuelve a consultar `/api/ventas` al abrirse y cada 10 segundos mientras permanece visible, para reflejar ventas hechas desde otro dispositivo conectado.
+- Las ventas se ordenan por fecha descendente antes de mostrarse, evitando que una venta antigua oculte la más reciente en el resumen de hoy.
+- Validación: TypeScript, comprobación backend y `git diff --check` correctos. La compilación APK de esta revisión queda pendiente de acceso EAS al proyecto Expo configurado.
