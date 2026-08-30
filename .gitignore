@@ -28,3 +28,9 @@ mobile/android/
 mobile/ios/
 Microsoft/
 mobile/.git-nested-backup/
+
+# Datos y evidencias locales: no forman parte del código reproducible.
+backend-node/storage/
+mobile/*-*.png
+mobile/calendar-test.png
+mobile/update-check-result.png

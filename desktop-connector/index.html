@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Conector Papachito</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="window-shell">
+      <header class="brand-row">
+        <div class="brand-mark">P</div>
+        <div><p class="eyebrow">DONDE PAPACHITO</p><h1>Conector</h1></div>
+        <span id="status" class="status pending"><i></i> Revisando</span>
+      </header>
+
+      <section class="hero">
+        <p class="eyebrow">CONEXIÓN DEL NEGOCIO</p>
+        <h2>Conecta tu celular<br />en un escaneo.</h2>
+        <p class="intro">Este QR enlaza la app instalada con esta computadora y su catálogo.</p>
+      </section>
+
+      <section class="qr-panel">
+        <div class="qr-frame"><img id="qr" alt="Código QR de conexión" /></div>
+        <p id="qr-hint" class="qr-hint">Preparando código seguro…</p>
+      </section>
+
+      <section class="checks">
+        <div class="check-row"><span class="check-icon" id="network-icon">•</span><div><strong>Red local</strong><small id="network-text">Detectando Wi‑Fi…</small></div><b id="network-state">—</b></div>
+        <div class="check-row"><span class="check-icon" id="api-icon">•</span><div><strong>Servidor Papachito</strong><small>API de ventas y sincronización</small></div><b id="api-state">—</b></div>
+        <div class="check-row"><span class="check-icon" id="web-icon">•</span><div><strong>Panel de computadora</strong><small>Catálogo y administración</small></div><b id="web-state">—</b></div>
+        <div class="check-row device-row"><span class="check-icon" id="device-icon">⌁</span><div><strong id="device-title">Teléfono</strong><small id="device-text">Esperando que escanees el QR</small></div><b id="device-state">Esperando</b></div>
+      </section>
+
+      <section id="devices-panel" class="devices-panel" hidden>
+        <div class="devices-heading"><div><p class="eyebrow">DISPOSITIVOS ACTIVOS</p><h3>Conectados a esta computadora</h3></div><span id="device-count" class="device-count">0</span></div>
+        <div id="device-list" class="device-list"></div>
+        <button id="open-system" class="primary">Abrir sistema en PC</button>
+      </section>
+
+      <div class="address" id="address">Esperando información de red…</div>
+      <div class="expo-address" id="expo-address" hidden>Expo Go · <span id="expo-url"></span></div>
+      <button id="retry" class="primary">Revisar conexión</button>
+      <p id="message" class="message">Abre la app Papachito y escanea este código desde Ajustes.</p>
+    </main>
+    <script src="renderer.js"></script>
+  </body>
+</html>

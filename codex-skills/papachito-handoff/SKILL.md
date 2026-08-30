@@ -17,6 +17,13 @@ Use this skill to resume work on Papachito Móvil without reconstructing the his
 6. Validate each change with syntax checks, database checks, and a mobile UI smoke test when applicable.
 7. Append a concise entry to `SYSTEM-MOVEMENT.md` describing files changed, checks run, and remaining risks.
 
+## Memory and token efficiency
+
+- Read the project memory and handoff before repeating discovery.
+- At the end of each task, record a short summary of actions, files, validations, errors, risks, and next step in the project memory or `SYSTEM-MOVEMENT.md`.
+- Keep reusable workflow rules here; keep project-specific findings in the project memory. Do not copy full logs or duplicate reports.
+- Never store credentials, passwords, tokens, cookies, database dumps, or other private data.
+
 ## Mapa de edición rápida
 
 Antes de editar, leer `docs/CODE-INDEX.md`. La lógica nueva debe ir en el módulo de su capa:
@@ -42,3 +49,26 @@ No añadir funcionalidad nueva a los archivos raíz si existe un módulo apropia
 ## Agent roles
 
 Read `references/agent-roles.md` when parallel work is useful. Agents may inspect independently, but only one agent should mutate a given migration file at a time.
+
+### Estela — asesora de visión
+
+Estela valida que las propuestas respeten la intención del creador y decide qué entra en la etapa actual. Los agentes pueden reportar faltantes, pero no convierten automáticamente cada faltante en trabajo. En particular, login/autenticación queda pospuesto hasta autorización explícita del creador.
+
+### Coordinación del equipo
+
+- El creador define la visión y las restricciones.
+- Estela interpreta esa visión y clasifica cada hallazgo como: atender ahora, dejar pendiente o descartar por no corresponder.
+- Los agentes especialistas revisan diseño, flujo/lógica, datos, red, investigación, errores y rendimiento/cargas; entregan evidencia, pero no cambian prioridades por su cuenta.
+- El agente principal comunica el criterio de Estela a todo el equipo, integra los informes y toma la decisión operativa final.
+- Si Estela no encuentra nada pendiente, debe declarar que el área está correcta y no inventar trabajo.
+
+## Continuation pointer — 2026-08-18
+
+- The current mobile update flow is in `mobile/src/githubApkUpdate.ts`, `mobile/src/usePapachitoApp.ts`, `mobile/src/screens.tsx`, and `mobile/src/ui.tsx`.
+- Reports now keep separate payment providers and expandable payment-sales modals; see `SYSTEM-MOVEMENT.md` for the latest verified behavior.
+- Live verification completed 2026-08-18: API `192.168.1.99:8090` accepted a Yape disable and the connected phone reflected `Yape · Desactivado`; web `192.168.1.99:8091` returned HTTP 200. The current UI polish is in `mobile/src/ui.tsx`.
+- Read `C:\Datos\Escritorio\codex\papachito-project-memory.md` for the compact continuation map.
+
+## Remote demo continuation
+
+When the user is outside the LAN, do not provide an `exp://192.168...` link as if it were public. Use the documented Expo tunnel flow and expose the read-only preview/API path with a temporary Cloudflare Quick Tunnel. Record only the procedure and verification, never ephemeral URLs or credentials.

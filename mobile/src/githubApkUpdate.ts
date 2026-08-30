@@ -62,19 +62,60 @@ export async function checkGithubApkUpdate(): Promise<GithubApkUpdate | null> {
   };
 }
 
-export async function downloadAndOpenGithubApk(update: GithubApkUpdate) {
+export type ApkDownloadProgress = {
+  receivedBytes: number;
+  totalBytes: number;
+  progress: number;
+};
+
+async function removeTemporaryApk(uri: string) {
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    if (info.exists) await FileSystem.deleteAsync(uri, { idempotent: true });
+  } catch {
+    // La limpieza es secundaria y no debe ocultar el resultado de la instalación.
+  }
+}
+
+export async function downloadAndOpenGithubApk(update: GithubApkUpdate, onProgress?: (progress: ApkDownloadProgress) => void) {
   if (Platform.OS !== 'android') throw new Error('La instalación directa está disponible solo en Android.');
   if (!FileSystem.documentDirectory) throw new Error('No se encontró almacenamiento local para descargar el APK.');
 
   const safeFileName = `papachito-update-${update.version.replace(/[^0-9.]/g, '_')}.apk`;
   const destination = `${FileSystem.documentDirectory}${safeFileName}`;
-  const result = await FileSystem.downloadAsync(update.downloadUrl, destination, {
+  // Evita acumular una descarga incompleta o un APK de un intento anterior.
+  await removeTemporaryApk(destination);
+  const download = FileSystem.createDownloadResumable(update.downloadUrl, destination, {
     headers: { Accept: 'application/vnd.android.package-archive' },
+  }, (event) => {
+    const totalBytes = event.totalBytesWritten > 0 ? event.totalBytesExpectedToWrite : 0;
+    onProgress?.({
+      receivedBytes: event.totalBytesWritten,
+      totalBytes,
+      progress: totalBytes > 0 ? Math.min(event.totalBytesWritten / totalBytes, 1) : 0,
+    });
   });
-  const contentUri = await FileSystem.getContentUriAsync(result.uri);
-  await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-    data: contentUri,
-    type: 'application/vnd.android.package-archive',
-    flags: 1,
-  });
+  let result: FileSystem.FileSystemDownloadResult | undefined;
+  try {
+    result = await download.downloadAsync();
+  } catch (error) {
+    await removeTemporaryApk(destination);
+    throw error;
+  }
+  if (!result?.uri) {
+    await removeTemporaryApk(destination);
+    throw new Error('La descarga no terminó correctamente.');
+  }
+  try {
+    const contentUri = await FileSystem.getContentUriAsync(result.uri);
+    // La promesa termina cuando el instalador vuelve, incluso si el usuario cancela.
+    await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+      data: contentUri,
+      type: 'application/vnd.android.package-archive',
+      flags: 1,
+    });
+  } finally {
+    // El instalador ya terminó; borrar el temporal evita llenar el almacenamiento.
+    await removeTemporaryApk(result.uri);
+  }
 }

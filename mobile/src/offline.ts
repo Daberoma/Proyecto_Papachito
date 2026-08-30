@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-export type OfflineSale={id:string,seller:string,items:any[],total:number,paymentMethod?:'cash'|'digital',createdAt:string,status:'pending'|'synced'|'error',remoteUuid?:string,error?:string};
+export type PaymentProvider = 'cash' | 'yape' | 'plin' | 'bbva' | 'digital_unknown';
+export type OfflineSale={id:string,seller:string,items:any[],total:number,paymentMethod?:'cash'|'digital',paymentProvider?:PaymentProvider,paymentLabel?:string,createdAt:string,status:'pending'|'synced'|'error',remoteUuid?:string,error?:string};
 const SALES_KEY='papachito.offline.sales';
 const SELLER_KEY='papachito.seller';
 const API_KEY='papachito.api.base';
@@ -64,16 +65,18 @@ export async function discoverApiBase(candidates:string[], ipAddress?:string):Pr
  if(match){for(let n=1;n<=254;n+=1) generated.push(`http://${match[1]}.${n}:8090`)}
  return detectApiBase(Array.from(new Set([...candidates,...generated,saved])));
 }
-export async function syncPendingSales(apiBase:string):Promise<{online:boolean,synced:number}>{
+export type StockWarning = { productId?: string|number; productName?: string; name?: string; requested?: number; available?: number; stock?: number; message?: string };
+export async function syncPendingSales(apiBase:string):Promise<{online:boolean,synced:number,warnings:StockWarning[]}>{
  const all=await getSales();
  const pending=all.filter((sale)=>sale.status!=='synced');
  if(pending.length===0){
   // No hace falta hacer una petición cada vez que se despierta la app si no
   // hay nada que sincronizar. El catálogo valida la conexión por separado.
-  return {online:true,synced:0};
+  return {online:true,synced:0,warnings:[]};
  }
  let changed=false;
  let synced=0;
+ let warnings:StockWarning[]=[];
  for(const sale of all){
   if(sale.status==='synced') continue;
   try{
@@ -82,6 +85,7 @@ export async function syncPendingSales(apiBase:string):Promise<{online:boolean,s
    if(!res.ok||!data.ok) throw new Error(data.message||'No sincronizo');
    sale.status='synced';
    sale.remoteUuid=data.uuid;
+   if(Array.isArray(data.warnings)) warnings.push(...data.warnings.filter((warning:any)=>warning && typeof warning==='object'));
    sale.error=undefined;
    synced++;
    changed=true;
@@ -93,5 +97,5 @@ export async function syncPendingSales(apiBase:string):Promise<{online:boolean,s
   }
  }
  if(changed) await replaceSales(all);
- return {online:synced>0||all.every((sale)=>sale.status==='synced'),synced};
+ return {online:synced>0||all.every((sale)=>sale.status==='synced'),synced,warnings};
 }

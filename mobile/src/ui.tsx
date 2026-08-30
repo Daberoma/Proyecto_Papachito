@@ -13,6 +13,7 @@ import {
   BarChart3,
   Minus,
   Maximize2,
+  Package,
   Plus,
   ReceiptText,
   Settings,
@@ -23,19 +24,21 @@ import {
 import type { LucideIcon } from 'lucide-react-native';
 import {
   money,
+  type ProductPresentation,
   saleTime,
   shortDate,
   type CartItem,
   type Product,
   type Screen,
 } from './domain';
-import type { OfflineSale } from './offline';
+import type { OfflineSale, PaymentProvider } from './offline';
 
 export function screenTitle(screen: Screen) {
   if (screen === 'history') return 'Historial';
   if (screen === 'report') return 'Reporte';
   if (screen === 'settings') return 'Ajustes';
   if (screen === 'payments') return 'Medios de pago';
+  if (screen === 'products') return 'Agregar producto';
   return 'Nueva venta';
 }
 
@@ -55,7 +58,7 @@ export function SectionTitle({ eyebrow, title, right, onRight, compact }: { eyeb
   );
 }
 
-export function CartSheet({ cart, total, paymentMethod, paymentConfig, onPaymentMethod, safeBottom, onClose, onAdd, onRemoveOne, onConfirm }: { cart: CartItem[]; total: number; paymentMethod: 'cash' | 'digital'; paymentConfig: { yapeEnabled: boolean; plinEnabled: boolean; bbvaEnabled: boolean; yapeQrUri?: string; plinQrUri?: string; bbvaQrUri?: string }; onPaymentMethod: (method: 'cash' | 'digital') => void; safeBottom: number; onClose: () => void; onAdd: (product: Product) => void; onRemoveOne: (product: CartItem) => void; onConfirm: () => void }) {
+export function CartSheet({ cart, total, paymentMethod, paymentConfig, desktop, submitting, onPaymentMethod, safeBottom, onClose, onAdd, onRemoveOne, onConfirm }: { cart: CartItem[]; total: number; paymentMethod: 'cash' | 'digital'; paymentConfig: { yapeEnabled: boolean; plinEnabled: boolean; bbvaEnabled: boolean; yapeQrUri?: string; plinQrUri?: string; bbvaQrUri?: string }; desktop?: boolean; submitting: boolean; onPaymentMethod: (method: 'cash' | 'digital') => void; safeBottom: number; onClose: () => void; onAdd: (product: Product) => void; onRemoveOne: (product: CartItem) => void; onConfirm: (provider?: PaymentProvider) => void }) {
   const [qrExpanded, setQrExpanded] = useState(false);
   const [digitalProvider, setDigitalProvider] = useState<'yape' | 'plin' | 'bbva'>('yape');
   const digitalOptions = [
@@ -80,7 +83,7 @@ export function CartSheet({ cart, total, paymentMethod, paymentConfig, onPayment
   }, [paymentConfig.yapeEnabled, paymentConfig.plinEnabled, paymentConfig.bbvaEnabled, digitalProvider]);
   return (
     <>
-    <Animated.View style={[styles.sheet, { bottom: 96 + safeBottom }]}>
+    <Animated.View style={[styles.sheet, desktop && styles.desktopSheet, desktop && styles.desktopCartSheet, { bottom: desktop ? '5%' : 96 + safeBottom }]}>
       <View style={styles.sheetHandle} />
       <View style={styles.sheetHeader}>
         <View style={styles.rowText}>
@@ -91,21 +94,21 @@ export function CartSheet({ cart, total, paymentMethod, paymentConfig, onPayment
           <X size={20} color="#174f42" strokeWidth={2.5} />
         </Pressable>
       </View>
-      <ScrollView style={styles.sheetItems}>
+      <ScrollView style={[styles.sheetItems, desktop && styles.desktopCartItems]}>
         {cart.map((item) => (
-          <View key={String(item.id)} style={styles.cartRow}>
+          <View key={String(item.id)} style={[styles.cartRow, desktop && styles.desktopCartRow]}>
             <View style={styles.rowText}>
-              <Text style={styles.cartName} numberOfLines={2} ellipsizeMode="tail">{item.name}</Text>
+              <Text style={[styles.cartName, desktop && styles.desktopCartName]} numberOfLines={2} ellipsizeMode="tail">{item.name}</Text>
               <Text style={styles.muted}>Cantidad: {item.quantity}</Text>
             </View>
-            <Text style={styles.simpleLineTotal}>{money(Number(item.price) * item.quantity)}</Text>
+            <Text style={[styles.simpleLineTotal, desktop && styles.desktopSimpleLineTotal]}>{money(Number(item.price) * item.quantity)}</Text>
             <Pressable onPress={() => onRemoveOne(item)} style={({ pressed }) => [styles.stepper, styles.stepperMinus, pressed && styles.buttonPressed]}><Minus size={18} color="#a74035" /></Pressable>
             <Text style={styles.qty}>{item.quantity}</Text>
             <Pressable onPress={() => onAdd(item)} style={({ pressed }) => [styles.stepper, styles.stepperPlus, pressed && styles.buttonPressed]}><Plus size={18} color="#174f42" /></Pressable>
           </View>
         ))}
       </ScrollView>
-      <View style={styles.paymentBox}>
+      <View style={[styles.paymentBox, desktop && styles.desktopPaymentBox]}>
         <Text style={styles.paymentLabel}>Medio de pago</Text>
         <View style={styles.segmented}>
           <Pressable onPress={() => onPaymentMethod('cash')} style={({ pressed }) => [styles.segment, paymentMethod === 'cash' && [styles.segmentActive, styles.segmentCashActive], pressed && styles.buttonPressed]}>
@@ -136,19 +139,19 @@ export function CartSheet({ cart, total, paymentMethod, paymentConfig, onPayment
         ) : (
           <Text style={styles.muted}>Recibe {money(total)} y confirma para guardar la venta.</Text>
         )}
-        <View style={styles.totalRow}>
+        <View style={[styles.totalRow, desktop && styles.desktopTotalRow]}>
           <Text style={styles.totalLabel}>Total</Text>
           <Text style={styles.totalValue}>{money(total)}</Text>
         </View>
       </View>
-      <Pressable onPress={onConfirm} style={styles.primaryButton}>
-        <Text style={styles.primaryText}>{paymentMethod === 'digital' ? 'Guardar venta pagada' : 'Confirmar venta'}</Text>
+      <Pressable disabled={submitting} onPress={() => onConfirm(paymentMethod === 'digital' ? activeDigital.key : 'cash')} style={[styles.primaryButton, desktop && styles.desktopConfirmButton, submitting && styles.buttonDisabled]}>
+        <Text style={styles.primaryText}>{submitting ? 'Guardando venta…' : paymentMethod === 'digital' ? 'Guardar venta pagada' : 'Confirmar venta'}</Text>
       </Pressable>
     </Animated.View>
     {qrExpanded ? (
       <View style={styles.qrOverlay}>
         <Pressable accessibilityLabel="Cerrar QR" onPress={() => setQrExpanded(false)} style={styles.qrOverlayDismiss} />
-        <View style={styles.qrModalCard}>
+    <View style={[styles.qrModalCard, desktop && styles.desktopQrModalCard]}>
           <View style={styles.qrModalHeader}>
             <Text style={styles.qrModalTitle}>QR de {activeDigital.label}</Text>
             <Pressable onPress={() => setQrExpanded(false)} style={styles.closeButton}>
@@ -166,8 +169,9 @@ export function CartSheet({ cart, total, paymentMethod, paymentConfig, onPayment
 
 // Tarjeta memoizada: al añadir un producto solo cambia el carrito, no se vuelve a
 // renderizar cada una de las tarjetas del catálogo (importante con catálogos grandes).
-export const ProductCard = memo(function ProductCard({ item, width, highlighted, onPress }: { item: Product; width: DimensionValue; highlighted?: boolean; onPress: (product: Product) => void }) {
+export const ProductCard = memo(function ProductCard({ item, width, desktop, highlighted, presentation, onPress }: { item: Product; width: DimensionValue; desktop?: boolean; highlighted?: boolean; presentation?: ProductPresentation; onPress: (product: Product) => void }) {
   const pulse = useRef(new Animated.Value(1)).current;
+  const [hovered, setHovered] = useState(false);
   const category = (item.category || 'Otros').toLowerCase();
   const categoryStyle = category.includes('agua')
     ? { background: '#dceafa', text: '#315b91', edge: '#78a9e3' }
@@ -196,14 +200,15 @@ export const ProductCard = memo(function ProductCard({ item, width, highlighted,
     }
   }, [highlighted, pulse]);
   return (
-    <Animated.View style={[{ width }, { transform: [{ scale: pulse }] }]}>
-    <Pressable onPress={() => onPress(item)} style={({ pressed }) => [styles.productCard, { borderLeftColor: categoryStyle.edge, borderLeftWidth: 4 }, highlighted && styles.productCardHighlighted, pressed && styles.productCardPressed, { width: '100%' }]}>
-      <View style={[styles.productIcon, { backgroundColor: categoryStyle.background }]}><Text style={[styles.productMarkText, { color: categoryStyle.text }]}>{mark}</Text></View>
+    <Animated.View style={[{ width, minWidth: desktop ? 280 : undefined }, { transform: [{ scale: pulse }] }]}>
+    <Pressable onPress={() => onPress(item)} onHoverIn={() => desktop && setHovered(true)} onHoverOut={() => desktop && setHovered(false)} style={({ pressed }) => [styles.productCard, desktop && styles.desktopProductCard, presentation?.tone === 'unit' && styles.productCardPresentationUnit, presentation?.tone === 'pack' && styles.productCardPresentationPack, presentation?.tone === 'box' && styles.productCardPresentationBox, desktop && hovered && styles.desktopProductHover, { borderLeftColor: presentation?.tone === 'unit' ? '#78a9e3' : presentation?.tone === 'pack' ? '#e4b34f' : presentation?.tone === 'box' ? '#a77bc8' : categoryStyle.edge, borderLeftWidth: 5 }, highlighted && styles.productCardHighlighted, pressed && styles.productCardPressed, { width: '100%' }]}>
+      <View style={[styles.productIcon, desktop && styles.desktopProductIcon, { backgroundColor: categoryStyle.background }]}><Text style={[styles.productMarkText, desktop && styles.desktopProductMarkText, { color: categoryStyle.text }]}>{mark}</Text></View>
       <View style={styles.productMain}>
-        <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-        <Text style={styles.productPrice}>{money(Number(item.price))}</Text>
+        <Text style={[styles.productName, desktop && styles.desktopProductName]} numberOfLines={2}>{item.name}</Text>
+        {presentation ? <View style={[styles.presentationBadge, presentation.tone === 'unit' ? styles.presentationUnit : presentation.tone === 'box' ? styles.presentationBox : styles.presentationPack]}><Text style={styles.presentationBadgeText}>{presentation.label}</Text></View> : null}
+        <Text style={[styles.productPrice, desktop && styles.desktopProductPrice]}>{money(Number(item.price))}</Text>
       </View>
-      <View style={styles.addBadge}><Plus size={20} color="#fff" strokeWidth={2.5} /></View>
+      <View style={[styles.addBadge, desktop && styles.desktopAddBadge]}><Plus size={desktop ? 18 : 20} color="#fff" strokeWidth={2.5} /></View>
     </Pressable>
     </Animated.View>
   );
@@ -231,6 +236,7 @@ export function BottomNav({ screen, setScreen, safeBottom }: { screen: Screen; s
 export function DesktopNav({ screen, setScreen, sellerName, online }: { screen: Screen; setScreen: (screen: Screen) => void; sellerName: string; online: boolean }) {
   const items: { key: Screen; icon: LucideIcon; label: string; hint: string }[] = [
     { key: 'sale', icon: ShoppingCart, label: 'Vender', hint: 'Nueva operación' },
+    { key: 'products', icon: Package, label: 'Productos', hint: 'Agregar al catálogo' },
     { key: 'history', icon: ReceiptText, label: 'Historial', hint: 'Ventas guardadas' },
     { key: 'report', icon: BarChart3, label: 'Reporte', hint: 'Resumen y métricas' },
     { key: 'settings', icon: Settings, label: 'Ajustes', hint: 'Configuración' },
@@ -254,7 +260,7 @@ export function DesktopNav({ screen, setScreen, sellerName, online }: { screen: 
   );
 }
 
-export function SaleRow({ sale, onDelete, onPress }: { sale: OfflineSale; onDelete: () => void; onPress?: () => void }) {
+export function SaleRow({ sale, cancelling, onDelete, onPress }: { sale: OfflineSale; cancelling?: boolean; onDelete: () => void; onPress?: () => void }) {
   return (
     <View style={styles.historyRow}>
       <Pressable accessibilityRole="button" accessibilityLabel={`Abrir venta del ${shortDate(sale.createdAt)}`} onPress={onPress} style={({ pressed }) => [styles.historyTop, pressed && styles.buttonPressed]}>
@@ -270,8 +276,8 @@ export function SaleRow({ sale, onDelete, onPress }: { sale: OfflineSale; onDele
       </Pressable>
       <View style={styles.historyBottom}>
         <Text style={styles.muted}>{sale.items.length} {sale.items.length === 1 ? 'producto' : 'productos'}</Text>
-        <Pressable onPress={onDelete} style={styles.deleteSaleButton}>
-          <Text style={styles.deleteSaleText}>Eliminar</Text>
+        <Pressable onPress={onDelete} disabled={cancelling} style={[styles.deleteSaleButton, cancelling && styles.buttonDisabled]}>
+          <Text style={styles.deleteSaleText}>{cancelling ? 'Anulando…' : 'Eliminar'}</Text>
         </Pressable>
       </View>
     </View>
@@ -280,10 +286,11 @@ export function SaleRow({ sale, onDelete, onPress }: { sale: OfflineSale; onDele
 
 export function Kpi({ label, value, inverse, tone, compact }: { label: string; value: string; inverse?: boolean; tone?: 'green' | 'blue' | 'amber'; compact?: boolean }) {
   const toneStyle = tone === 'green' ? styles.kpiToneGreen : tone === 'blue' ? styles.kpiToneBlue : tone === 'amber' ? styles.kpiToneAmber : null;
+  const longValue = value.length > 9;
   return (
     <View style={[inverse ? styles.kpiInverse : styles.kpi, toneStyle, compact && styles.kpiMobile]}>
       <Text style={inverse ? styles.kpiLabelInverse : styles.kpiLabel}>{label}</Text>
-      <Text style={[inverse ? styles.kpiValueInverse : styles.kpiValue, compact && styles.kpiValueMobile]}>{value}</Text>
+      <Text numberOfLines={1} style={[inverse ? styles.kpiValueInverse : styles.kpiValue, compact && styles.kpiValueMobile, longValue && styles.kpiValueLong]}>{value}</Text>
     </View>
   );
 }
@@ -333,8 +340,9 @@ export const styles = StyleSheet.create({
   shell: { flex: 1, width: '100%', maxWidth: 1120, backgroundColor: '#f6f1ea' },
   shellWide: { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#e7ded3' },
   shellDesktop: { paddingLeft: 220 },
-  desktopNav: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 220, backgroundColor: '#123f35', paddingHorizontal: 18, paddingTop: 28, zIndex: 30 },
-  desktopLogo: { width: 58, height: 58, borderRadius: 29, alignSelf: 'center' },
+  desktopShell: { maxWidth: 1680, width: '100%', paddingLeft: 250 },
+  desktopNav: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 250, backgroundColor: '#123f35', paddingHorizontal: 22, paddingTop: 34, zIndex: 30 },
+  desktopLogo: { width: 72, height: 72, borderRadius: 36, alignSelf: 'center' },
   desktopBrand: { color: '#e7f1eb', fontSize: 12, fontWeight: '900', letterSpacing: 1.6, textAlign: 'center', marginTop: 12 },
   desktopUser: { color: '#b8d3c8', textAlign: 'center', marginTop: 5, fontWeight: '800' },
   desktopStatus: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 18, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.08)' },
@@ -342,19 +350,60 @@ export const styles = StyleSheet.create({
   desktopDotOn: { backgroundColor: '#73d39d' },
   desktopDotOff: { backgroundColor: '#e8b06b' },
   desktopStatusText: { color: '#d8e8df', fontSize: 12, fontWeight: '800' },
-  desktopMenu: { gap: 8, marginTop: 28 },
-  desktopNavItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 13, borderRadius: 12 },
+  desktopMenu: { gap: 10, marginTop: 34 },
+  desktopNavItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 14, paddingVertical: 16, borderRadius: 14 },
   desktopNavItemActive: { backgroundColor: '#2b705d' },
   desktopNavText: { flex: 1 },
-  desktopNavLabel: { color: '#b8d3c8', fontSize: 15, fontWeight: '900' },
+  desktopNavLabel: { color: '#b8d3c8', fontSize: 17, fontWeight: '900' },
   desktopNavLabelActive: { color: '#fff' },
-  desktopNavHint: { color: '#83ad9d', fontSize: 11, marginTop: 2 },
+  desktopNavHint: { color: '#83ad9d', fontSize: 12, marginTop: 3 },
   desktopFooter: { position: 'absolute', left: 18, right: 18, bottom: 22, color: '#83ad9d', fontSize: 11, textAlign: 'center' },
   centerCard: { width: '92%', maxWidth: 420, alignSelf: 'center', marginTop: 90, backgroundColor: '#fffdfa', borderWidth: 1, borderColor: '#e6ddd2', borderRadius: 8, padding: 24, gap: 14 },
   setupLogo: { width: 96, height: 96, borderRadius: 48, alignSelf: 'center' },
   header: { paddingHorizontal: 24, paddingTop: 28, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' },
+  desktopHeader: { paddingHorizontal: 44, paddingTop: 34, paddingBottom: 22, alignItems: 'center', gap: 20 },
   headerCompact: { paddingHorizontal: 16, paddingTop: 18, gap: 6 },
   headerLogo: { width: 46, height: 46, borderRadius: 23, marginTop: 2 },
+  desktopHeaderLogo: { width: 58, height: 58, borderRadius: 29, marginTop: 0 },
+  productAdminScreen: { gap: 22 },
+  productAdminHero: { backgroundColor: '#174f42', borderRadius: 24, padding: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 20 },
+  productAdminHeroCopy: { flex: 1, gap: 7 },
+  productAdminTitle: { color: '#fff', fontSize: 34, fontWeight: '900' },
+  productAdminSubtitle: { color: '#cfe5da', fontSize: 16, lineHeight: 24, maxWidth: 760 },
+  productAdminHeroBadge: { minWidth: 190, minHeight: 112, borderRadius: 18, backgroundColor: '#2b8069', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  productAdminHeroBadgeText: { color: '#fff', fontWeight: '900', fontSize: 13 },
+  productAdminColumns: { flexDirection: 'row', gap: 18 },
+  productAdminStepCard: { flex: 1, backgroundColor: '#fffdfa', borderWidth: 1, borderColor: '#b8d8c2', borderRadius: 20, padding: 26, gap: 12 },
+  productAdminInfoCard: { flex: 1, backgroundColor: '#f4efe7', borderWidth: 1, borderColor: '#e6ddd2', borderRadius: 20, padding: 26, gap: 12 },
+  productAdminCardTitle: { color: '#123f35', fontSize: 24, fontWeight: '900' },
+  productAdminAction: { alignSelf: 'flex-start', minWidth: 210, marginTop: 8 },
+  productAdminListCard: { backgroundColor: '#fffdfa', borderWidth: 1, borderColor: '#e6ddd2', borderRadius: 20, padding: 22, gap: 10 },
+  productAdminListHeader: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 18, paddingBottom: 8 },
+  productAdminCount: { color: '#174f42', fontSize: 17, fontWeight: '900' },
+  productAdminSearchBox: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#f7faf7', borderWidth: 1, borderColor: '#b9d5c5', borderRadius: 13, paddingHorizontal: 15, marginBottom: 4 },
+  productAdminSearchInput: { flex: 1, minWidth: 0, color: '#141a18', fontSize: 16, outlineStyle: 'none' as any },
+  productAdminSearchClear: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#e4f1ea', alignItems: 'center', justifyContent: 'center' },
+  productAdminListHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#f4f1eb', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  productAdminColumnLabel: { flex: 0.75, color: '#7a827d', fontSize: 11, fontWeight: '900' },
+  productAdminColumnName: { flex: 2 },
+  productAdminRow: { flexDirection: 'row', alignItems: 'center', gap: 14, borderTopWidth: 1, borderTopColor: '#eee7dc', paddingVertical: 12, minHeight: 68 },
+  productAdminProductCell: { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0 },
+  productAdminImage: { width: 44, height: 44, borderRadius: 10, backgroundColor: '#e8f0fb' },
+  productAdminInitial: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#e8f0fb' },
+  productAdminInitialText: { color: '#315b91', fontWeight: '900' },
+  productAdminProductName: { color: '#141a18', fontSize: 15, fontWeight: '900' },
+  productAdminDescription: { color: '#8a918c', fontSize: 12, marginTop: 3 },
+  productAdminCellText: { flex: 0.75, color: '#5e6762', fontSize: 13, fontWeight: '800' },
+  productAdminPrice: { flex: 0.75, color: '#174f42', fontSize: 15, fontWeight: '900' },
+  productAdminEditButton: { minWidth: 76, borderRadius: 9, borderWidth: 1, borderColor: '#9cc6ad', backgroundColor: '#e4f1ea', paddingHorizontal: 12, paddingVertical: 9, alignItems: 'center' },
+  productAdminEditText: { color: '#174f42', fontWeight: '900' },
+  productAdminActions: { flex: 0.9, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 7 },
+  productAdminDeleteButton: { minWidth: 82, borderRadius: 9, borderWidth: 1, borderColor: '#e2b2aa', backgroundColor: '#fde8e5', paddingHorizontal: 10, paddingVertical: 9, alignItems: 'center' },
+  productAdminDeleteText: { color: '#a74035', fontWeight: '900' },
+  productDeleteSuccess: { marginTop: 12, borderRadius: 10, borderWidth: 1, borderColor: '#b7dfc8', backgroundColor: '#e8f6ed', padding: 12 },
+  productDeleteSuccessText: { color: '#17633c', fontWeight: '800' },
+  productAdminEmpty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 42, gap: 6 },
+  productAdminEmptyTitle: { color: '#141a18', fontSize: 17, fontWeight: '900' },
   userBlock: { flex: 1 },
   brand: { color: '#1b5b4e', fontSize: 12, fontWeight: '900', letterSpacing: 2 },
   title: { color: '#141a18', fontSize: 28, fontWeight: '900', marginTop: 2 },
@@ -367,11 +416,14 @@ export const styles = StyleSheet.create({
   statusText: { color: '#174f42', fontWeight: '900', textAlign: 'center' },
   offlineHint: { marginHorizontal: 24, marginBottom: 4, color: '#7a5a16', fontWeight: '800', fontSize: 13 },
   searchArea: { position: 'relative', zIndex: 25 },
+  desktopSearchArea: { paddingHorizontal: 32 },
   searchBackdrop: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(20,26,24,0.16)', zIndex: 20 },
   globalSearch: { marginHorizontal: 24, marginBottom: 8, minHeight: 56, backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#c9d7cf', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 9 },
+  desktopGlobalSearch: { marginHorizontal: 0, marginBottom: 12, minHeight: 48, borderRadius: 12, paddingHorizontal: 14 },
   globalSearchFocused: { borderColor: '#174f42', backgroundColor: '#ffffff' },
   globalSearchCompact: { marginHorizontal: 16 },
   searchInput: { flex: 1, fontSize: 17, color: '#151a18', minHeight: 52, outlineWidth: 0 },
+  desktopSearchInput: { color: '#24312c', outlineWidth: 0, borderWidth: 0, backgroundColor: 'transparent', padding: 0 },
   clearButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#e4f1ea', alignItems: 'center', justifyContent: 'center' },
   clearText: { color: '#174f42', fontWeight: '900' },
   searchPanel: { position: 'absolute', top: 62, left: 24, right: 24, backgroundColor: '#fffdfa', borderRadius: 16, borderWidth: 1, borderColor: '#ded8cf', overflow: 'hidden', zIndex: 30, elevation: 10, shadowColor: '#17211d', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
@@ -397,12 +449,15 @@ export const styles = StyleSheet.create({
   searchEmptyTitle: { color: '#141a18', fontWeight: '900', fontSize: 14 },
   searchEmptyText: { color: '#6b746f', fontSize: 12, marginTop: 3 },
   content: { paddingHorizontal: 24, paddingBottom: 104, gap: 10 },
+  desktopContent: { paddingHorizontal: 44, paddingBottom: 72, gap: 16 },
   contentCompact: { paddingHorizontal: 16, paddingBottom: 112 },
   connectionHint: { color: '#8a6a36', fontWeight: '800', marginTop: -5 },
   grid: { gap: 14 },
-  gridWide: { flexDirection: 'row', alignItems: 'flex-start' },
-  mainColumn: { flex: 1, gap: 14 },
-  sideColumn: { width: '100%', gap: 14, maxWidth: 340 },
+  gridWide: { flexDirection: 'row', alignItems: 'flex-start', gap: 20 },
+  desktopGrid: { gap: 18 },
+  mainColumn: { flex: 1, minWidth: 0, gap: 14 },
+  desktopMainColumn: { gap: 16 },
+  sideColumn: { width: '100%', flexBasis: 320, flexShrink: 1, gap: 14, maxWidth: 320 },
   sectionHeading: { marginTop: 2, marginBottom: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 },
   sectionHeadingCompact: { marginBottom: 0, gap: 8 },
   eyebrow: { color: '#1b5b4e', fontSize: 12, fontWeight: '900', letterSpacing: 2 },
@@ -418,22 +473,126 @@ export const styles = StyleSheet.create({
   chipTextActive: { color: '#fff' },
   productGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   productCard: { backgroundColor: '#fffdfa', borderColor: '#e5ddd3', borderWidth: 1, borderRadius: 16, padding: 12, minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  productCardPresentationUnit: { backgroundColor: '#fbfdff' },
+  productCardPresentationPack: { backgroundColor: '#fffdf5' },
+  productCardPresentationBox: { backgroundColor: '#fdfaff' },
+  desktopProductCard: { borderRadius: 16, padding: 12, minHeight: 108, gap: 12 },
+  desktopProductHover: { backgroundColor: '#eef8f2', borderColor: '#5baf84', shadowColor: '#174f42', shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
   productIcon: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  desktopProductIcon: { width: 48, height: 48, borderRadius: 14 },
   productMarkText: { fontSize: 14, fontWeight: '900', letterSpacing: 0.5 },
+  desktopProductMarkText: { fontSize: 14 },
   productCardPressed: { borderColor: '#174f42', backgroundColor: '#f1f7f3', transform: [{ scale: 0.985 }] },
   productCardHighlighted: { borderColor: '#5baf84', borderWidth: 2 },
   productMain: { flex: 1, minWidth: 0, gap: 5 },
   productName: { color: '#141a18', fontSize: 16, lineHeight: 20, fontWeight: '900' },
+  presentationBadge: { alignSelf: 'flex-start', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, marginTop: 5, marginBottom: 3 },
+  presentationUnit: { backgroundColor: '#e5effb' },
+  presentationPack: { backgroundColor: '#fff0c7' },
+  presentationBox: { backgroundColor: '#eadcf7' },
+  presentationBadgeText: { fontSize: 11, fontWeight: '900' },
+  desktopProductName: { fontSize: 16, lineHeight: 20 },
   productDescription: { color: '#4d5853', marginTop: 8, lineHeight: 19 },
   stockText: { color: '#7b6659', fontWeight: '800', marginTop: 6, fontSize: 12 },
   productFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', gap: 8 },
   productPrice: { color: '#174f42', fontSize: 18, fontWeight: '900' },
+  desktopProductPrice: { fontSize: 19, marginTop: 4 },
   addBadge: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#174f42', alignItems: 'center', justifyContent: 'center' },
+  desktopAddBadge: { width: 46, height: 46, borderRadius: 23 },
   addBadgeText: { color: '#fff', fontSize: 22, fontWeight: '500', lineHeight: 24 },
-  panel: { backgroundColor: '#fffdfa', borderRadius: 8, borderWidth: 1, borderColor: '#e6ddd2', padding: 16, gap: 12 },
+  panel: { backgroundColor: '#fffdfa', borderRadius: 14, borderWidth: 1, borderColor: '#e6ddd2', padding: 18, gap: 14 },
+  addProductPanel: { backgroundColor: '#e9f5ee', borderRadius: 18, borderWidth: 1, borderColor: '#b8d8c2', padding: 22, gap: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  addProductPanelCopy: { flex: 1, gap: 5, minWidth: 0 },
+  addProductPanelTitle: { color: '#123f35', fontSize: 22, fontWeight: '900' },
+  addProductButton: { minWidth: 190, marginTop: 0 },
+  productCreatorModal: { minHeight: 420 },
+  productCreatorScroll: { maxHeight: 420 },
+  productCreatorContent: { gap: 18, paddingVertical: 4 },
+  productFormColumns: { flexDirection: 'row', gap: 26 },
+  productFormFields: { flex: 1, gap: 8, minWidth: 0 },
+  productFormRow: { flexDirection: 'row', gap: 10 },
+  productFormHalf: { flex: 1, gap: 8, minWidth: 0 },
+  currencyInput: { minHeight: 54, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fffdfa', borderColor: '#d9d3c9', borderWidth: 1, borderRadius: 12, paddingLeft: 15 },
+  currencyPrefix: { color: '#174f42', fontSize: 16, fontWeight: '900', marginRight: 7 },
+  currencyTextInput: { flex: 1, minWidth: 0, minHeight: 52, paddingHorizontal: 4, fontSize: 16, color: '#151a18', outlineStyle: 'none' as any },
+  categoryFieldWrap: { position: 'relative', zIndex: 100, elevation: 100 },
+  categoryInputRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fffdfa', borderColor: '#d9d3c9', borderWidth: 1, borderRadius: 12, paddingLeft: 15, overflow: 'hidden' },
+  categoryTextInput: { flex: 1, minWidth: 0, minHeight: 52, paddingHorizontal: 0, fontSize: 16, color: '#151a18', outlineStyle: 'none' as any },
+  categoryTextValue: { flex: 1, color: '#151a18', fontSize: 16 },
+  categoryPlaceholder: { color: '#89918c' },
+  categoryChevron: { width: 42, height: 52, alignItems: 'center', justifyContent: 'center' },
+  categoryChevronText: { color: '#174f42', fontSize: 22, fontWeight: '900', marginTop: -8 },
+  categorySuggestions: { position: 'absolute', left: 0, right: 0, top: 82, backgroundColor: '#fffdfa', borderWidth: 1, borderColor: '#cfe2d5', borderRadius: 12, padding: 6, gap: 3, zIndex: 120, elevation: 120, shadowColor: '#123f35', shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  inlineSuggestions: { backgroundColor: '#fffdfa', borderWidth: 1, borderColor: '#cfe2d5', borderRadius: 12, padding: 6, marginTop: 5, gap: 3, zIndex: 20, elevation: 18, shadowColor: '#123f35', shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  categorySuggestion: { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  categorySuggestionText: { color: '#174f42', fontWeight: '800' },
+  suggestionMeta: { color: '#6a716d', fontSize: 12, marginTop: 3 },
+  categoryNewSuggestion: { flexDirection: 'row', alignItems: 'center', gap: 9, borderRadius: 8, backgroundColor: '#e4f1ea', paddingHorizontal: 10, paddingVertical: 9 },
+  categoryNewIcon: { color: '#174f42', fontSize: 22, fontWeight: '900' },
+  categoryNewTitle: { color: '#174f42', fontWeight: '900' },
+  categoryNewName: { color: '#5e6762', fontSize: 12, marginTop: 2 },
+  categoryEmpty: { color: '#7d8781', fontSize: 12, paddingHorizontal: 10, paddingVertical: 9 },
+  categoryPickerOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 80, alignItems: 'center', justifyContent: 'center' },
+  categoryPickerDismiss: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(20,26,24,0.22)' },
+  categoryPickerCard: { width: 420, maxWidth: '88%', maxHeight: '72%', backgroundColor: '#fffdfa', borderRadius: 20, padding: 20, gap: 13, zIndex: 81, borderWidth: 1, borderColor: '#cfe2d5', shadowColor: '#123f35', shadowOpacity: 0.22, shadowRadius: 22, shadowOffset: { width: 0, height: 10 }, elevation: 30 },
+  categoryPickerTitle: { color: '#141a18', fontSize: 22, fontWeight: '900', marginTop: 3 },
+  categoryPickerList: { maxHeight: 300 },
+  categoryPickerItem: { borderRadius: 10, paddingHorizontal: 13, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#eee7dc' },
+  categoryPickerItemText: { color: '#174f42', fontSize: 16, fontWeight: '900' },
+  categoryPickerNew: { flexDirection: 'row', alignItems: 'center', gap: 9, borderRadius: 10, backgroundColor: '#e4f1ea', paddingHorizontal: 11, paddingVertical: 11, marginTop: 7 },
+  presentationOptionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },
+  presentationOption: { borderRadius: 10, borderWidth: 2, paddingHorizontal: 13, paddingVertical: 10 },
+  presentationOptionActive: { shadowColor: '#174f42', shadowOpacity: 0.12, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
+  presentationOptionText: { fontWeight: '900', fontSize: 13 },
+  presentationQuantityRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  presentationPreview: { flex: 1, minHeight: 54, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, justifyContent: 'center' },
+  presentationPreviewLabel: { fontWeight: '900', fontSize: 14 },
+  presentationPreviewHint: { color: '#6a716d', fontSize: 11, marginTop: 2 },
+  presentationPriceList: { gap: 8 },
+  presentationPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  presentationTypePill: { width: 82, minHeight: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  presentationUnitPill: { backgroundColor: '#e5effb', borderColor: '#78a9e3' },
+  presentationPackPill: { backgroundColor: '#fff0c7', borderColor: '#e4b34f' },
+  presentationBoxPill: { backgroundColor: '#eadcf7', borderColor: '#a77bc8' },
+  presentationTypePillOff: { opacity: 0.48 },
+  presentationPriceLabel: { color: '#174f42', fontWeight: '900' },
+  presentationQuantityInput: { width: 66, minHeight: 48, borderRadius: 10, borderWidth: 1, borderColor: '#d9d3c9', backgroundColor: '#fffdfa', paddingHorizontal: 10, color: '#151a18', textAlign: 'center', fontSize: 15 },
+  formLabel: { color: '#174f42', fontSize: 12, fontWeight: '900', marginTop: 3 },
+  productDescriptionInput: { minHeight: 72, textAlignVertical: 'top' },
+  productImageBox: { width: 260, minHeight: 250, borderRadius: 18, borderWidth: 1, borderColor: '#cfe2d5', backgroundColor: '#f5fbf7', padding: 14, alignItems: 'center', justifyContent: 'center', gap: 14, zIndex: 1 },
+  productImagePreview: { width: 180, height: 180, borderRadius: 14, backgroundColor: '#fff' },
+  productImagePlaceholder: { width: 180, height: 180, borderRadius: 14, backgroundColor: '#e4f1ea', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  productImagePlaceholderText: { color: '#58917b', fontWeight: '900' },
+  productCreatorActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  productEditModal: { minHeight: 420 },
+  productEditScroll: { maxHeight: 420 },
+  productCreatedState: { alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 28 },
+  productSuccessMark: { width: 76, height: 76, borderRadius: 38, backgroundColor: '#2b8a68', alignItems: 'center', justifyContent: 'center' },
+  productSuccessMarkText: { color: '#fff', fontSize: 42, fontWeight: '900' },
+  productCreatedTitle: { color: '#123f35', fontSize: 26, fontWeight: '900' },
   updateNotice: { backgroundColor: '#eef7f1', borderRadius: 10, borderWidth: 1, borderColor: '#b8d8c2', padding: 12, gap: 8 },
-  panelLarge: { backgroundColor: '#fffdfa', borderRadius: 8, borderWidth: 1, borderColor: '#e6ddd2', padding: 18, gap: 14 },
+  updateProgressBox: { backgroundColor: '#f7fbf8', borderRadius: 12, borderWidth: 1, borderColor: '#cfe2d5', padding: 12, gap: 9 },
+  updateProgressHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  updateProgressTitleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  updateProgressTitle: { color: '#174f42', fontWeight: '900', fontSize: 14 },
+  updateProgressPercent: { color: '#174f42', fontWeight: '900', fontSize: 15, fontVariant: ['tabular-nums'] },
+  updateProgressTrack: { height: 9, borderRadius: 5, overflow: 'hidden', backgroundColor: '#dcebe1' },
+  updateProgressFill: { height: '100%', borderRadius: 5, backgroundColor: '#2f8c68' },
+  updateProgressHint: { color: '#6a716d', fontSize: 12, fontWeight: '700' },
+  panelLarge: { backgroundColor: '#fffdfa', borderRadius: 14, borderWidth: 1, borderColor: '#e6ddd2', padding: 18, gap: 14 },
   panelLargeMobile: { padding: 14, gap: 10, borderRadius: 12 },
+  reportHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 },
+  reportHeaderTitle: { color: '#141a18', fontSize: 24, fontWeight: '900', marginTop: 3 },
+  reportRefreshButton: { borderRadius: 9, borderWidth: 1, borderColor: '#a7cfb8', backgroundColor: '#e4f1ea', paddingHorizontal: 13, paddingVertical: 10, alignItems: 'center' },
+  reportRefreshText: { color: '#174f42', fontWeight: '900' },
+  reportOriginTabs: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', padding: 4, borderRadius: 12, backgroundColor: '#ebe5dc' },
+  reportOriginButton: { borderRadius: 9, paddingHorizontal: 13, paddingVertical: 10 },
+  reportOriginButtonActive: { backgroundColor: '#174f42' },
+  reportOriginText: { color: '#5e6762', fontWeight: '900' },
+  reportOriginTextActive: { color: '#fff' },
+  reportCombinedWarning: { borderRadius: 10, backgroundColor: '#fff0c9', borderWidth: 1, borderColor: '#e5c86f', padding: 10 },
+  reportCombinedWarningText: { color: '#765416', fontWeight: '800', fontSize: 13 },
+  reportReadOnlyHint: { borderRadius: 9, backgroundColor: '#fff0c9', color: '#765416', fontWeight: '800', paddingHorizontal: 12, paddingVertical: 10, alignSelf: 'flex-start' },
   periodTabs: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   periodTab: { borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#ebe5dc' },
   periodTabActive: { backgroundColor: '#174f42' },
@@ -456,14 +615,20 @@ export const styles = StyleSheet.create({
   calendarDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#1b6b58' },
   calendarHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   calendarHint: { color: '#6a716d', fontSize: 12, fontWeight: '700' },
-  dayModalOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 30, alignItems: 'center', justifyContent: 'center', padding: 16 },
+  dayModalOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, width: '100%', zIndex: 30, alignItems: 'center', justifyContent: 'center', padding: 20 },
   dayModalDismiss: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(20,26,24,0.58)' },
-  dayModalCard: { width: '100%', maxWidth: 560, maxHeight: '76%', minWidth: 0, alignSelf: 'center', overflow: 'hidden', backgroundColor: '#fffdfa', borderRadius: 20, padding: 16, gap: 12, zIndex: 31, elevation: 16 },
+  dayModalCard: { width: '92%', maxWidth: 560, maxHeight: '76%', minWidth: 0, alignSelf: 'center', overflow: 'hidden', backgroundColor: '#fffdfa', borderRadius: 20, padding: 16, gap: 12, zIndex: 31, elevation: 16 },
+  productDeleteModal: { maxWidth: 620 },
+  productDeleteError: { borderRadius: 10, borderWidth: 1, borderColor: '#e2b2aa', backgroundColor: '#fde8e5', padding: 11 },
+  productDeleteErrorText: { color: '#a74035', fontWeight: '800' },
+  productDeleteConfirmButton: { borderRadius: 8, backgroundColor: '#a74035', padding: 14, alignItems: 'center', justifyContent: 'center' },
+  productDeleteConfirmText: { color: '#fff', fontWeight: '900' },
+  desktopModalCard: { width: '78%', maxWidth: 1040, maxHeight: '88%', borderRadius: 24, padding: 30, gap: 18 },
   dayModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, minWidth: 0 },
   dayModalHeaderCopy: { flex: 1, minWidth: 0 },
   dayModalTitle: { color: '#141a18', fontSize: 23, fontWeight: '900', marginTop: 3, textTransform: 'capitalize' },
   daySalesList: { maxHeight: 330 },
-  daySaleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: '#eee7dc', paddingVertical: 11 },
+  daySaleRow: { flexDirection: 'row', alignItems: 'flex-start', minWidth: 0, gap: 10, borderTopWidth: 1, borderTopColor: '#eee7dc', paddingVertical: 11 },
   daySaleTitle: { color: '#141a18', fontWeight: '900' },
   daySaleTotal: { color: '#174f42', fontSize: 16, fontWeight: '900' },
   saleDetailMeta: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
@@ -477,6 +642,14 @@ export const styles = StyleSheet.create({
   historicalRow: { flexDirection: 'row', gap: 28, flexWrap: 'wrap' },
   preferenceRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   paymentSettingsCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f1f7f3', borderRadius: 12, borderWidth: 1, borderColor: '#cfe2d5', padding: 14 },
+  paymentReportRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 11, borderWidth: 1, borderColor: '#e5ddd3', backgroundColor: '#fffdfa', paddingHorizontal: 10, paddingVertical: 10 },
+  paymentReportRowDisabled: { opacity: 0.56, backgroundColor: '#f3f1ed' },
+  paymentReportDot: { width: 11, height: 11, borderRadius: 6 },
+  paymentReportLabel: { color: '#141a18', fontWeight: '900', fontSize: 14 },
+  paymentReportState: { color: '#6a716d', fontSize: 11, fontWeight: '700', marginTop: 2 },
+  paymentReportTotal: { color: '#174f42', fontSize: 15, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  paymentReportTextDisabled: { color: '#77736c' },
+  reportClickableRow: { borderRadius: 11 },
   paymentMethodCard: { backgroundColor: '#fffdfa', borderRadius: 14, borderWidth: 1, borderColor: '#e5ddd3', borderLeftWidth: 5, padding: 14, gap: 14 },
   paymentMethodHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   paymentMethodTitle: { color: '#141a18', fontSize: 17, fontWeight: '900' },
@@ -496,31 +669,82 @@ export const styles = StyleSheet.create({
   primaryText: { color: '#fff', fontWeight: '900', fontSize: 16 },
   secondaryButton: { borderRadius: 8, borderColor: '#174f42', borderWidth: 1, padding: 14, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: '#174f42', fontWeight: '900' },
+  buttonDisabled: { opacity: 0.52 },
+  flowWarning: { marginTop: 10, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#fff0c9', borderWidth: 1, borderColor: '#e5c86f' },
+  flowWarningText: { color: '#765416', fontWeight: '800', fontSize: 13, lineHeight: 18 },
   inlineActions: { flexDirection: 'row', gap: 10 },
   cartFab: { position: 'absolute', left: 24, right: 24, bottom: 78, maxWidth: 560, alignSelf: 'center', backgroundColor: '#174f42', borderRadius: 16, padding: 16, flexDirection: 'row', justifyContent: 'space-between' },
+  desktopCartFab: { left: 'auto', right: 28, width: 360, maxWidth: 360, alignSelf: 'auto', borderRadius: 14, paddingHorizontal: 20, paddingVertical: 14, shadowColor: '#123f35', shadowOpacity: 0.2, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, zIndex: 15 },
+  pcCheckoutOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 60, alignItems: 'center', justifyContent: 'center', padding: 28 },
+  pcCheckoutModal: { width: '100%', maxWidth: 1220, maxHeight: '88%', backgroundColor: '#fffdfa', borderRadius: 26, padding: 30, gap: 22, borderWidth: 1, borderColor: '#d8e5dd', shadowColor: '#123f35', shadowOpacity: 0.24, shadowRadius: 28, shadowOffset: { width: 0, height: 14 }, elevation: 22 },
+  pcCheckoutHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 18 },
+  pcCheckoutTitle: { color: '#141a18', fontSize: 30, fontWeight: '900', marginTop: 3 },
+  pcCheckoutSubtitle: { color: '#6a716d', fontSize: 15, marginTop: 5 },
+  pcCheckoutBody: { flexDirection: 'row', gap: 20, minHeight: 300 },
+  pcOrderPanel: { flex: 1.35, backgroundColor: '#fbfaf6', borderWidth: 1, borderColor: '#e5ddd3', borderRadius: 18, padding: 18, gap: 12, minWidth: 0 },
+  pcPaymentPanel: { flex: 0.9, backgroundColor: '#f1f7f3', borderWidth: 1, borderColor: '#cfe2d5', borderRadius: 18, padding: 18, gap: 12, minWidth: 0 },
+  pcPanelHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  pcPanelTitle: { color: '#174f42', fontSize: 18, fontWeight: '900' },
+  pcPanelCount: { color: '#6a716d', fontSize: 12, fontWeight: '800' },
+  pcOrderList: { maxHeight: 260 },
+  pcOrderRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: '#e7dfd4', paddingVertical: 12 },
+  pcOrderName: { color: '#141a18', fontSize: 15, fontWeight: '900' },
+  pcOrderLineTotal: { color: '#315b91', fontSize: 16, fontWeight: '900', minWidth: 88, textAlign: 'right' },
+  pcOrderTotal: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff0c9', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 13 },
+  pcOrderTotalLabel: { color: '#141a18', fontSize: 16, fontWeight: '900' },
+  pcOrderTotalValue: { color: '#141a18', fontSize: 26, fontWeight: '900' },
+  pcPaymentTabs: { flexDirection: 'row', backgroundColor: '#e1e5df', borderRadius: 12, padding: 5, gap: 5 },
+  pcPaymentTab: { flex: 1, minHeight: 52, borderRadius: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  pcPaymentTabCash: { backgroundColor: '#fff0c9', borderWidth: 1, borderColor: '#e5c978' },
+  pcPaymentTabDigital: { backgroundColor: '#e8eef8', borderWidth: 1, borderColor: '#b9c9e3' },
+  pcPaymentTabText: { color: '#141a18', fontWeight: '900' },
+  pcCashHint: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8, padding: 20 },
+  pcCashHintTitle: { color: '#174f42', fontSize: 20, fontWeight: '900' },
+  pcDigitalChoices: { flexDirection: 'row', gap: 7 },
+  pcDigitalChoice: { flex: 1, minHeight: 38, borderRadius: 9, backgroundColor: '#e4ece7', alignItems: 'center', justifyContent: 'center' },
+  pcDigitalChoiceActive: { backgroundColor: '#d5ebdf', borderWidth: 1, borderColor: '#82b99a' },
+  pcDigitalChoiceText: { color: '#174f42', fontSize: 12, fontWeight: '900' },
+  pcQrTitle: { color: '#174f42', fontSize: 16, fontWeight: '900', textAlign: 'center' },
+  pcQrFrame: { width: 190, height: 190, alignSelf: 'center', borderRadius: 16, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 1, borderColor: '#d9e5de' },
+  pcQrImage: { width: 174, height: 174 },
+  pcPaymentHint: { color: '#174f42', fontSize: 12, fontWeight: '800', textAlign: 'center' },
+  pcConfirmButton: { minHeight: 60, borderRadius: 13, backgroundColor: '#174f42', alignItems: 'center', justifyContent: 'center' },
+  pcConfirmText: { color: '#fff', fontSize: 17, fontWeight: '900' },
+  pcQrOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 70, alignItems: 'center', justifyContent: 'center' },
+  pcQrDismiss: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(20,26,24,0.82)' },
+  pcQrExpandedCard: { width: 520, maxWidth: '90%', backgroundColor: '#fffdfa', borderRadius: 22, padding: 24, alignItems: 'center', gap: 12, zIndex: 71 },
+  pcQrExpandedImage: { width: 400, height: 400, maxWidth: '100%', backgroundColor: '#fff' },
   cartFabText: { color: '#fff', fontWeight: '900' },
   cartFabTotal: { color: '#fff', fontWeight: '900', fontSize: 18 },
-  sheetBackdrop: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(20,26,24,0.42)', zIndex: 11 },
-  sheet: { position: 'absolute', left: 12, right: 12, bottom: 78, maxWidth: 620, maxHeight: '72%', alignSelf: 'center', backgroundColor: '#fffdfa', borderRadius: 24, padding: 16, gap: 8, borderWidth: 1, borderColor: '#e5ddd3', zIndex: 12, elevation: 12 },
-  sheetHandle: { width: 72, height: 6, borderRadius: 6, backgroundColor: '#d8d4ce', alignSelf: 'center' },
+  sheetBackdrop: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(20,26,24,0.42)', zIndex: 40 },
+  mobileSheetBackdrop: { backgroundColor: 'rgba(20,26,24,0.28)' },
+  sheet: { position: 'absolute', left: 12, right: 12, bottom: 78, maxWidth: 620, maxHeight: '74%', alignSelf: 'center', backgroundColor: '#fffdfa', borderRadius: 22, padding: 13, gap: 6, borderWidth: 1, borderColor: '#e5ddd3', zIndex: 50, elevation: 24 },
+  desktopSheet: { left: '18%', right: '18%', maxWidth: 1040, maxHeight: '82%', borderRadius: 26, padding: 28, gap: 14 },
+  desktopCartSheet: { left: 40, right: 40, maxWidth: 1180, maxHeight: '90%', borderRadius: 28, padding: 32, gap: 18, borderColor: '#d9e5de', shadowColor: '#123f35', shadowOpacity: 0.18, shadowRadius: 28, shadowOffset: { width: 0, height: 12 }, zIndex: 50 },
+  sheetHandle: { width: 64, height: 5, borderRadius: 6, backgroundColor: '#d8d4ce', alignSelf: 'center' },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sheetTitle: { color: '#141a18', fontSize: 26, fontWeight: '900' },
-  closeButton: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#edf0ec', alignItems: 'center', justifyContent: 'center' },
+  sheetTitle: { color: '#141a18', fontSize: 24, fontWeight: '900' },
+  closeButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#edf0ec', alignItems: 'center', justifyContent: 'center' },
   closeText: { color: '#174f42', fontSize: 22, fontWeight: '900' },
-  sheetItems: { maxHeight: 132 },
-  cartRow: { borderTopColor: '#e7dfd4', borderTopWidth: 1, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sheetItems: { maxHeight: 118 },
+  desktopCartItems: { maxHeight: 220 },
+  cartRow: { borderTopColor: '#e7dfd4', borderTopWidth: 1, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  desktopCartRow: { paddingVertical: 14, gap: 14, borderTopColor: '#dfe8e2' },
   rowText: { flex: 1 },
-  cartName: { color: '#141a18', fontSize: 15, fontWeight: '900' },
+  cartName: { color: '#141a18', fontSize: 14, lineHeight: 18, fontWeight: '900' },
+  desktopCartName: { fontSize: 17, lineHeight: 22 },
   removeText: { color: '#a74035', fontWeight: '900', marginTop: 8 },
-  stepper: { width: 42, height: 42, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  stepper: { width: 38, height: 38, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   stepperMinus: { backgroundColor: '#fde8e5', borderColor: '#e2b2aa' },
   stepperPlus: { backgroundColor: '#e4f1ea', borderColor: '#a7cfb8' },
   stepperText: { color: '#174f42', fontSize: 22, fontWeight: '900' },
-  qty: { minWidth: 34, textAlign: 'center', color: '#315b91', backgroundColor: '#e8eef8', borderRadius: 8, paddingVertical: 8, fontSize: 19, fontWeight: '900' },
-  simpleLineTotal: { color: '#315b91', fontSize: 16, fontWeight: '900' },
-  paymentBox: { backgroundColor: '#f1f2ed', borderRadius: 8, padding: 12, gap: 8 },
+  qty: { minWidth: 30, textAlign: 'center', color: '#315b91', backgroundColor: '#e8eef8', borderRadius: 8, paddingVertical: 7, fontSize: 17, fontWeight: '900' },
+  simpleLineTotal: { color: '#315b91', fontSize: 15, fontWeight: '900' },
+  desktopSimpleLineTotal: { fontSize: 18, minWidth: 100, textAlign: 'right' },
+  paymentBox: { backgroundColor: '#f1f2ed', borderRadius: 8, padding: 10, gap: 6 },
+  desktopPaymentBox: { backgroundColor: '#f4f8f5', borderRadius: 18, padding: 18, gap: 12, borderWidth: 1, borderColor: '#d9e5de' },
   paymentLabel: { color: '#141a18', fontWeight: '900' },
-  segmented: { minHeight: 54, borderRadius: 12, backgroundColor: '#e2e4dd', flexDirection: 'row', padding: 5, gap: 5 },
+  segmented: { minHeight: 48, borderRadius: 11, backgroundColor: '#e2e4dd', flexDirection: 'row', padding: 4, gap: 4 },
   segmentActive: { flex: 1, backgroundColor: '#fff', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   segmentCashActive: { backgroundColor: '#fff0c9', borderColor: '#e5c978', borderWidth: 1 },
   segmentDigitalActive: { backgroundColor: '#e8eef8', borderColor: '#b9c9e3', borderWidth: 1 },
@@ -530,8 +754,8 @@ export const styles = StyleSheet.create({
   segmentDisabled: { opacity: 0.45 },
   digitalPayment: { alignItems: 'center', gap: 4, paddingVertical: 2 },
   digitalTitle: { color: '#174f42', fontWeight: '900', fontSize: 16 },
-  paymentQrFrame: { width: 150, height: 150, borderRadius: 12, backgroundColor: '#fff', overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  paymentQrImage: { width: 138, height: 138 },
+  paymentQrFrame: { width: 128, height: 128, borderRadius: 12, backgroundColor: '#fff', overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  paymentQrImage: { width: 116, height: 116 },
   qrMissingText: { color: '#6a716d', fontWeight: '800', textAlign: 'center', paddingHorizontal: 18 },
   digitalChoices: { flexDirection: 'row', gap: 6, width: '100%' },
   digitalChoice: { flex: 1, minHeight: 36, borderRadius: 8, backgroundColor: '#edf0ec', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
@@ -540,16 +764,19 @@ export const styles = StyleSheet.create({
   digitalChoiceTextActive: { color: '#174f42' },
   qrExpandBadge: { position: 'absolute', right: 8, bottom: 8, width: 30, height: 30, borderRadius: 15, backgroundColor: '#e4f1ea', alignItems: 'center', justifyContent: 'center' },
   qrHint: { color: '#174f42', fontSize: 12, fontWeight: '800' },
-  qrOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 40, alignItems: 'center', justifyContent: 'center' },
+  qrOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 60, elevation: 60, alignItems: 'center', justifyContent: 'center' },
   qrOverlayDismiss: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(20,26,24,0.82)' },
-  qrModalCard: { width: '88%', maxWidth: 440, backgroundColor: '#fffdfa', borderRadius: 22, padding: 16, alignItems: 'center', gap: 10, elevation: 18 },
+  qrModalCard: { width: '88%', maxWidth: 440, backgroundColor: '#fffdfa', borderRadius: 22, padding: 16, alignItems: 'center', gap: 10, zIndex: 61, elevation: 64 },
+  desktopQrModalCard: { width: '72%', maxWidth: 760, borderRadius: 26, padding: 28, gap: 16 },
   qrModalHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   qrModalTitle: { color: '#141a18', fontSize: 22, fontWeight: '900' },
   qrModalImage: { width: '100%', height: 340, backgroundColor: '#fff' },
   qrModalHint: { color: '#174f42', fontWeight: '900', fontSize: 16, textAlign: 'center' },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: '#fff0c9' },
+  desktopTotalRow: { marginTop: 8, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 14 },
   totalLabel: { color: '#141a18', fontSize: 20, fontWeight: '900' },
   totalValue: { color: '#141a18', fontSize: 32, fontWeight: '900' },
+  desktopConfirmButton: { minHeight: 62, borderRadius: 14, marginTop: 2 },
   bottomNav: { position: 'absolute', left: 14, right: 14, bottom: 0, height: 72, paddingHorizontal: 8, paddingTop: 7, backgroundColor: 'rgba(255,253,250,0.97)', borderColor: '#ded8cf', borderWidth: 1, borderRadius: 28, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
   navItem: { alignItems: 'center', justifyContent: 'center', minWidth: 70, minHeight: 58, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, gap: 2 },
   navItemActive: { backgroundColor: '#e4f1ea' },
@@ -571,6 +798,7 @@ export const styles = StyleSheet.create({
   historyMoreButton: { backgroundColor: '#e4f1ea', borderColor: '#a7cfb8', borderWidth: 1, borderRadius: 12, padding: 15, alignItems: 'center' },
   historyMoreText: { color: '#174f42', fontWeight: '900' },
   historyModalCard: { width: '100%', maxWidth: 620, maxHeight: '82%', backgroundColor: '#fffdfa', borderRadius: 20, padding: 16, gap: 12, zIndex: 31, elevation: 16 },
+  desktopHistoryModalCard: { width: '78%', maxWidth: 1040, maxHeight: '88%', borderRadius: 24, padding: 30, gap: 18 },
   historyModalList: { maxHeight: 600 },
   historyModalItem: { marginBottom: 10 },
   historyTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -594,6 +822,7 @@ export const styles = StyleSheet.create({
   kpiLabel: { color: '#6a716d', fontWeight: '800' },
   kpiLabelInverse: { color: '#bfd0ca', fontWeight: '800' },
   kpiValue: { color: '#141a18', fontWeight: '900', fontSize: 28, marginTop: 4 },
+  kpiValueLong: { fontSize: 20, letterSpacing: -0.4 },
   kpiValueInverse: { color: '#fff', fontWeight: '900', fontSize: 28, marginTop: 4 },
   kpiValueMobile: { fontSize: 22, marginTop: 2 },
   reportHero: { backgroundColor: '#fffdfa', borderRadius: 8, borderWidth: 1, borderColor: '#e6ddd2', padding: 18, gap: 14, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },

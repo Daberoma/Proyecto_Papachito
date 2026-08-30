@@ -26,6 +26,12 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE INDEX IF NOT EXISTS products_name_idx ON products (name);
 CREATE INDEX IF NOT EXISTS products_category_idx ON products (category_id);
 
+CREATE TABLE IF NOT EXISTS product_images (
+    product_id BIGINT PRIMARY KEY,
+    image_url TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS product_stock (
     product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     warehouse_id INTEGER NOT NULL DEFAULT 20,

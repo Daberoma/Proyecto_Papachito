@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS product_images (
+    product_id BIGINT PRIMARY KEY,
+    image_url TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

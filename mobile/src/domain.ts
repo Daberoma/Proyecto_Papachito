@@ -11,23 +11,31 @@ export type Product = {
   price: string | number;
   category?: string;
   stock?: string | number;
+  imageUrl?: string;
+  presentationType?: string;
+  presentationQuantity?: number;
+  presentationLabel?: string;
+  presentationColor?: string;
 };
 
 export type CartItem = Product & { quantity: number };
-export type Screen = 'sale' | 'history' | 'report' | 'settings' | 'payments';
+export type Screen = 'sale' | 'history' | 'report' | 'settings' | 'payments' | 'products';
 export type SearchResult =
   | { type: 'product'; title: string; subtitle: string; product: Product }
   | { type: 'sale'; title: string; subtitle: string; sale: OfflineSale };
 export type ReportPeriod = 'dia' | 'mes' | 'ano' | 'historico';
+export type ReportOrigin = 'current' | 'historical' | 'all';
 export type RemoteReport = {
   period: ReportPeriod;
+  origin?: ReportOrigin;
+  readOnly?: boolean;
   from: string;
   to: string;
   summary: { count: number; total: number; average: number };
   series: { date: string; count: number; total: number }[];
-  historical: { count: number; total: number; firstDate?: string; lastDate?: string };
+  historical: { count: number; total: number; firstDate?: string; lastDate?: string; source?: string; readOnly?: boolean };
   topProducts?: { name: string; quantity: number; total: number }[];
-  payments?: { label: string; total: number }[];
+  payments?: { label: string; total: number; code?: string }[];
   sellers?: { label: string; count: number; total: number }[];
 };
 
@@ -56,7 +64,35 @@ export const localDateKey = (value: Date | string) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
 
+export type ProductPresentation = {
+  label: string;
+  tone: 'unit' | 'pack' | 'box';
+};
+
 export const productSearchText = (product: Product) => `${product.name} ${product.description || ''} ${product.category || ''} ${product.sku || ''} ${product.barcode || ''} ${product.price}`.toLowerCase();
+
+const presentationKey = (product: Product) => `${product.name.trim().toLowerCase()}|${String(product.category || '').trim().toLowerCase()}`;
+
+export const productPresentation = (product: Product, catalog: Product[]): ProductPresentation => {
+  if (product.presentationLabel) {
+    const tone = product.presentationColor === 'box' ? 'box' : product.presentationColor === 'pack' ? 'pack' : 'unit';
+    return { label: product.presentationLabel, tone };
+  }
+  const price = Number(product.price) || 0;
+  const related = catalog
+    .filter((candidate) => presentationKey(candidate) === presentationKey(product))
+    .map((candidate) => Number(candidate.price) || 0)
+    .filter((value) => value > 0);
+  const base = related.length ? Math.min(...related) : price;
+  const ratio = base > 0 ? price / base : 1;
+  const explicitPack = /\b(caja|pack|paquete|six[- ]?pack)\b/i.test(product.name);
+  if (ratio <= 1.08 && !explicitPack) return { label: 'Unidad', tone: 'unit' };
+  if (ratio <= 1.08 && explicitPack) return { label: 'Pack', tone: 'pack' };
+  const packSizes = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 24];
+  const quantity = packSizes.reduce((nearest, candidate) => Math.abs(candidate - ratio) < Math.abs(nearest - ratio) ? candidate : nearest, packSizes[0]);
+  const isBox = quantity >= 10 || /\bcaja\b/i.test(product.name);
+  return { label: isBox ? `Caja x${quantity}` : `Pack x${quantity}`, tone: isBox ? 'box' : 'pack' };
+};
 export const saleSearchText = (sale: OfflineSale) => `${sale.seller} ${sale.status} ${sale.total} ${sale.items.map((item) => item.name).join(' ')}`.toLowerCase();
 
 export const classifyProduct = (product: Product): string => {
