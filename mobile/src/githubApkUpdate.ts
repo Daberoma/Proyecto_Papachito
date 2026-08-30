@@ -14,6 +14,7 @@ export type GithubApkUpdate = {
   publishedAt?: string;
   downloadUrl: string;
   fileName: string;
+  fileSize: number;
 };
 
 export const installedVersion = String(Constants.expoConfig?.version || '0.1.0');
@@ -59,6 +60,7 @@ export async function checkGithubApkUpdate(): Promise<GithubApkUpdate | null> {
     publishedAt: release.published_at ? String(release.published_at) : undefined,
     downloadUrl,
     fileName: String(apk.name),
+    fileSize: Math.max(0, Number(apk.size || 0)),
   };
 }
 
@@ -105,6 +107,12 @@ export async function downloadAndOpenGithubApk(update: GithubApkUpdate, onProgre
   if (!result?.uri) {
     await removeTemporaryApk(destination);
     throw new Error('La descarga no terminó correctamente.');
+  }
+  const info = await FileSystem.getInfoAsync(result.uri);
+  const actualSize = Number((info as { size?: number }).size || 0);
+  if (!info.exists || !actualSize || (update.fileSize > 0 && actualSize !== update.fileSize)) {
+    await removeTemporaryApk(result.uri);
+    throw new Error('La descarga del APK quedó incompleta. Vuelve a intentarlo con una conexión estable.');
   }
   try {
     const contentUri = await FileSystem.getContentUriAsync(result.uri);

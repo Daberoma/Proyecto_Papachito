@@ -416,3 +416,10 @@ Formato compacto: fecha · movimiento · evidencia · siguiente acción.
 - La boleta simple fue ajustada a un formato vertical tipo ticket: logo, negocio, código de operación, fecha, hora, vendedor, cliente de consumo interno, columnas de descripción/cantidad/P.U./total, subtotal, impuestos informativos, importe total, medio de pago y cierre.
 - Se incrementó la versión Android a `0.1.3` (código 3) para que la actualización desde GitHub Releases sea detectada por los dispositivos que tienen `0.1.2`.
 - Build EAS preview finalizado con `versionCode 3`; APK publicado en la Release pública [`v0.1.3`](https://github.com/Daberoma/Proyecto_Papachito/releases/tag/v0.1.3).
+
+## 2026-08-30 — corrección de APK incompleto y validación Android
+
+- Se detectó que el primer asset publicado para `v0.1.3` estaba truncado (74 MB frente a los 120 MB del artefacto EAS); por eso Android lo rechazaba antes de instalar. La Release fue reemplazada por un único APK íntegro con el mismo nombre.
+- El APK de reemplazo fue descargado desde GitHub y verificado: archivo ZIP correcto, firma APK v2 válida, paquete `com.papachito.mobile`, versión `0.1.3` y código 3.
+- Se alinearon las dependencias al SDK 57 de Expo (`expo-doctor`: 21/21 comprobaciones), y la exportación Android limpia terminó correctamente.
+- El actualizador Android ahora valida que los bytes descargados coincidan con el tamaño publicado por GitHub antes de abrir el instalador. La siguiente versión queda preparada como `0.1.4` / código 4, usando la versión local del proyecto como fuente única para EAS.
