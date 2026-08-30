@@ -423,3 +423,4 @@ Formato compacto: fecha · movimiento · evidencia · siguiente acción.
 - El APK de reemplazo fue descargado desde GitHub y verificado: archivo ZIP correcto, firma APK v2 válida, paquete `com.papachito.mobile`, versión `0.1.3` y código 3.
 - Se alinearon las dependencias al SDK 57 de Expo (`expo-doctor`: 21/21 comprobaciones), y la exportación Android limpia terminó correctamente.
 - El actualizador Android ahora valida que los bytes descargados coincidan con el tamaño publicado por GitHub antes de abrir el instalador. La siguiente versión queda preparada como `0.1.4` / código 4, usando la versión local del proyecto como fuente única para EAS.
+- Build EAS `0.1.4` / código 4 y Release pública [`v0.1.4`](https://github.com/Daberoma/Proyecto_Papachito/releases/tag/v0.1.4) verificados tras descargarlos desde GitHub: tamaño 120,360,663 bytes, ZIP íntegro y firma APK v2 con el mismo certificado de las versiones previas.
