@@ -773,23 +773,37 @@ export function MainShell({ app }: { app: AppState }) {
             <View style={styles.receiptHeader}>
               <Image source={require('../papachito-logo.jpg')} style={styles.receiptLogo} />
               <Text style={styles.receiptBrand}>DONDE PAPACHITO</Text>
+              <Text style={styles.receiptBusiness}>Venta de abarrotes y productos de consumo</Text>
               <Text style={styles.receiptTitle}>BOLETA SIMPLE</Text>
-              <Text style={styles.receiptMeta}>Comprobante interno · no tributario</Text>
-              <Text style={styles.receiptMeta}>{reportDateLabel(receiptSale.createdAt, 'dia')} · {saleTime(receiptSale.createdAt)}</Text>
-              <Text style={styles.receiptMeta}>Atendió: {receiptSale.seller || 'Sin nombre'}</Text>
+              <Text style={styles.receiptOperation}>OP-{(receiptSale.remoteUuid || receiptSale.id).slice(-8).toUpperCase()}</Text>
             </View>
+            <View style={styles.receiptInfoGrid}>
+              <View style={styles.receiptInfoBlock}><Text style={styles.receiptInfoLabel}>FECHA</Text><Text style={styles.receiptInfoValue}>{reportDateLabel(receiptSale.createdAt, 'dia')}</Text></View>
+              <View style={styles.receiptInfoBlock}><Text style={styles.receiptInfoLabel}>HORA</Text><Text style={styles.receiptInfoValue}>{saleTime(receiptSale.createdAt)}</Text></View>
+              <View style={styles.receiptInfoBlock}><Text style={styles.receiptInfoLabel}>ATENDIÓ</Text><Text style={styles.receiptInfoValue}>{receiptSale.seller || 'Sin nombre'}</Text></View>
+              <View style={styles.receiptInfoBlock}><Text style={styles.receiptInfoLabel}>CLIENTE</Text><Text style={styles.receiptInfoValue}>Consumo interno</Text></View>
+            </View>
+            <View style={styles.receiptTableHeader}><Text style={styles.receiptTableDescription}>DESCRIPCIÓN</Text><Text style={styles.receiptTableQty}>CANT.</Text><Text style={styles.receiptTablePrice}>P.U.</Text><Text style={styles.receiptTableTotal}>TOTAL</Text></View>
             <ScrollView style={styles.receiptItems}>
               {receiptSale.items.map((item: any, index: number) => {
                 const quantity = Number(item.quantity || 1);
                 const price = Number(item.price || item.unitPrice || 0);
                 return <View key={`${receiptSale.id}-receipt-${index}`} style={styles.receiptItemRow}>
-                  <Text style={styles.receiptItemName}>{quantity} × {item.name || 'Producto'}</Text>
-                  <Text style={styles.receiptItemPrice}>{money(quantity * price)}</Text>
+                  <Text style={styles.receiptItemName}>{item.name || 'Producto'}</Text>
+                  <Text style={styles.receiptItemQty}>{quantity}</Text>
+                  <Text style={styles.receiptItemPrice}>{money(price)}</Text>
+                  <Text style={styles.receiptItemTotal}>{money(quantity * price)}</Text>
                 </View>;
               })}
             </ScrollView>
-            <View style={styles.receiptTotalRow}><Text style={styles.receiptTotalLabel}>TOTAL</Text><Text style={styles.receiptTotalValue}>{money(receiptSale.total)}</Text></View>
-            <Text style={styles.receiptMeta}>Pago: {receiptSale.paymentMethod === 'digital' ? 'Digital' : 'Efectivo'}</Text>
+            <View style={styles.receiptSummary}>
+              <View style={styles.receiptSummaryRow}><Text style={styles.receiptSummaryLabel}>SUBTOTAL</Text><Text style={styles.receiptSummaryValue}>{money(receiptSale.total)}</Text></View>
+              <View style={styles.receiptSummaryRow}><Text style={styles.receiptSummaryLabel}>IMPUESTOS</Text><Text style={styles.receiptSummaryValue}>S/ 0.00</Text></View>
+              <View style={styles.receiptTotalRow}><Text style={styles.receiptTotalLabel}>IMPORTE TOTAL</Text><Text style={styles.receiptTotalValue}>{money(receiptSale.total)}</Text></View>
+            </View>
+            <View style={styles.receiptPayment}><Text style={styles.receiptPaymentLabel}>MEDIO DE PAGO</Text><Text style={styles.receiptPaymentValue}>{receiptSale.paymentMethod === 'digital' ? (receiptSale.paymentLabel || 'Pago digital') : 'Efectivo'}</Text></View>
+            <Text style={styles.receiptFooter}>Comprobante interno · no tributario</Text>
+            <Text style={styles.receiptThanks}>Gracias por tu compra</Text>
             <Pressable onPress={() => setReceiptSale(null)} style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}><Text style={styles.primaryText}>Cerrar</Text></Pressable>
           </View>
         </View>

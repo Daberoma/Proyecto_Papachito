@@ -2,12 +2,12 @@
   "expo": {
     "name": "Donde Papachito",
     "slug": "donde-papachito",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "scheme": "papachito",
     "orientation": "default",
     "icon": "./icon.png",
     "android": {
-      "versionCode": 2,
+      "versionCode": 3,
       "icon": "./icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./icon.png",

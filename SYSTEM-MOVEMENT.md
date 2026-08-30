@@ -410,3 +410,8 @@ Formato compacto: fecha · movimiento · evidencia · siguiente acción.
 - El detalle incluye `Ver boleta`, una boleta simple interna con el logo de Donde Papachito; no se presenta como comprobante tributario.
 - Desde Reporte se puede solicitar `Anular venta` para operaciones actuales o consolidadas. La acción pide confirmación, revierte la operación sincronizada en el servidor y refresca el reporte; el histórico importado continúa en solo lectura.
 - Los listados por día y por vendedor también muestran el nombre de quien atendió cada operación, manteniendo el orden más reciente primero.
+
+## 2026-08-29 — boleta interna tipo ticket y versión 0.1.3
+
+- La boleta simple fue ajustada a un formato vertical tipo ticket: logo, negocio, código de operación, fecha, hora, vendedor, cliente de consumo interno, columnas de descripción/cantidad/P.U./total, subtotal, impuestos informativos, importe total, medio de pago y cierre.
+- Se incrementó la versión Android a `0.1.3` (código 3) para que la actualización desde GitHub Releases sea detectada por los dispositivos que tienen `0.1.2`.
