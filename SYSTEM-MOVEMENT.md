@@ -415,3 +415,4 @@ Formato compacto: fecha · movimiento · evidencia · siguiente acción.
 
 - La boleta simple fue ajustada a un formato vertical tipo ticket: logo, negocio, código de operación, fecha, hora, vendedor, cliente de consumo interno, columnas de descripción/cantidad/P.U./total, subtotal, impuestos informativos, importe total, medio de pago y cierre.
 - Se incrementó la versión Android a `0.1.3` (código 3) para que la actualización desde GitHub Releases sea detectada por los dispositivos que tienen `0.1.2`.
+- Build EAS preview finalizado con `versionCode 3`; APK publicado en la Release pública [`v0.1.3`](https://github.com/Daberoma/Proyecto_Papachito/releases/tag/v0.1.3).
