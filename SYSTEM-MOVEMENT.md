@@ -390,3 +390,23 @@ Formato compacto: fecha · movimiento · evidencia · siguiente acción.
 
 - La ventana del conector muestra debajo de la dirección LAN la URL `exp://IP:8081`, calculada con la IP Wi‑Fi detectada en cada actualización.
 - Validación: el estado devolvió `exp://10.214.240.242:8081` junto con API/web listos.
+
+## 2026-08-29 — estado visible de actualización
+
+- El panel de computadora estaba sirviendo una exportación web anterior (1.0.0) aunque la configuración actual de la app ya es 0.1.2; se regeneró `mobile/dist` mediante Expo para alinear el panel con la versión vigente.
+- `Buscar actualización` ahora conserva un mensaje visible: en PC confirma que el panel está actualizado y aclara que los APK se actualizan desde el teléfono; en Android confirma que ya está en la versión instalada cuando GitHub no tiene una versión superior.
+- Validación: `npx tsc --noEmit`, `node --check backend-node/server.js` y la exportación web de Expo finalizaron correctamente.
+
+## 2026-08-29 — reporte simplificado para operación diaria
+
+- El gráfico mensual dejó de dibujar columnas vacías para cada día sin ventas: ahora muestra únicamente los días o meses con movimiento, junto con un resumen de cantidad de días y total vendido.
+- En PC los tres indicadores ocupan el ancho disponible; la vista de ventas actuales ya no muestra el bloque del sistema histórico, y el detalle de pagos reduce filas sin uso.
+- Los pagos digitales sin proveedor identificado se presentan como `Registrado`, no como desactivados cuando contienen ventas.
+- Validación: TypeScript, exportación web y revisión de la pantalla de Reporte contra la API local completados correctamente.
+
+## 2026-08-29 — detalle de ventas, vendedores y boleta simple
+
+- Las ventas recientes del Reporte ahora son seleccionables y abren el detalle completo con fecha, hora, vendedor, estado, medio de pago, productos y total.
+- El detalle incluye `Ver boleta`, una boleta simple interna con el logo de Donde Papachito; no se presenta como comprobante tributario.
+- Desde Reporte se puede solicitar `Anular venta` para operaciones actuales o consolidadas. La acción pide confirmación, revierte la operación sincronizada en el servidor y refresca el reporte; el histórico importado continúa en solo lectura.
+- Los listados por día y por vendedor también muestran el nombre de quien atendió cada operación, manteniendo el orden más reciente primero.

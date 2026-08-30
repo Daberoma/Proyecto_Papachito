@@ -430,10 +430,14 @@ app.put('/api/ventas/:uuid', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const current = await client.query('SELECT id, customer_name, original_payload FROM sales WHERE sale_uuid=$1 AND status=\'completed\' FOR UPDATE', [uuid]);
+    const current = await client.query('SELECT id, customer_name, legacy_cpe_id, original_payload FROM sales WHERE sale_uuid=$1 AND status=\'completed\' FOR UPDATE', [uuid]);
     if (!current.rowCount) {
       await client.query('ROLLBACK');
       return res.status(409).json({ ok: false, message: 'Solo se pueden editar ventas completadas existentes' });
+    }
+    if (current.rows[0].legacy_cpe_id || current.rows[0].original_payload?.legacy_id) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ ok: false, message: 'Las ventas del histórico importado son de solo lectura' });
     }
     const oldItems = await client.query('SELECT product_id, quantity FROM sale_items WHERE sale_id=$1', [current.rows[0].id]);
     for (const item of oldItems.rows) {
@@ -476,10 +480,14 @@ app.delete('/api/ventas/:uuid', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const current = await client.query(`SELECT id FROM sales WHERE sale_uuid=$1 AND status <> 'cancelled' FOR UPDATE`, [uuid]);
+    const current = await client.query(`SELECT id, legacy_cpe_id, original_payload FROM sales WHERE sale_uuid=$1 AND status <> 'cancelled' FOR UPDATE`, [uuid]);
     if (!current.rowCount) {
       await client.query('ROLLBACK');
       return res.status(404).json({ ok: false, message: 'Venta no encontrada o ya anulada' });
+    }
+    if (current.rows[0].legacy_cpe_id || current.rows[0].original_payload?.legacy_id) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ ok: false, message: 'Las ventas del histórico importado son de solo lectura' });
     }
     const items = await client.query('SELECT product_id, quantity FROM sale_items WHERE sale_id=$1', [current.rows[0].id]);
     for (const item of items.rows) {
@@ -518,6 +526,7 @@ app.get('/api/ventas', async (_req, res) => {
   values.push(limit);
   const result = await pool.query(`
     SELECT s.sale_uuid AS uuid, s.legacy_cpe_id, s.document_type, s.series, s.document_number, s.status,
+           CASE WHEN ${reportOriginPredicate('historical', 's')} THEN 'historical' ELSE 'current' END AS origin,
            COALESCE(s.original_payload->>'seller', s.customer_name) AS customer_name, s.sold_at, s.total,
            COALESCE((SELECT pm.code FROM sale_payments sp JOIN payment_methods pm ON pm.id=sp.payment_method_id WHERE sp.sale_id=s.id LIMIT 1), 'cash') AS payment_provider,
            COALESCE((SELECT pm.name FROM sale_payments sp JOIN payment_methods pm ON pm.id=sp.payment_method_id WHERE sp.sale_id=s.id LIMIT 1), 'EFECTIVO') AS payment_method_name,

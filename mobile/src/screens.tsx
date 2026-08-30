@@ -44,13 +44,13 @@ export function MainShell({ app }: { app: AppState }) {
   const {
     insets, isWide, isNarrow, productCardWidth, sellerName, settingsName, screen, products, cart, sales, online, apiBase, connectionQr,
     loadingCatalog, search, category, cartOpen, paymentMethod, reportPeriod, reportOrigin, remoteReport, reportDetailSales, calendarSaleCounts, reportLoading, reportStale,
-    scannerOpen, searchingServer, lastSyncAt, paymentConfig, savedApiBases, addedProductPulse, availableUpdate, updateChecking,
+    scannerOpen, searchingServer, lastSyncAt, paymentConfig, savedApiBases, addedProductPulse, availableUpdate, updateChecking, updateStatus,
     updateInstalling, updateDownloadProgress, installedVersion, installedVersionCode, pendingCount, cartTotal, categories, searchText, filteredProducts, saleSubmitting, syncing, syncError, serverSaving, cancellingSaleId, catalogUsingCache,
     filteredSales, visibleSales, searchResults, todaySales, todayTotal, reportTotal, topProducts, paymentBreakdown,
     sellerBreakdown, maxProductTotal, maxPaymentTotal, maxSellerTotal, reportSummary, reportSeries, reportMax, setSettingsName,
     setApiBaseState, setSearch, setCategory, setCartOpen, setPaymentMethod, setReportPeriod, setReportOrigin, setScannerOpen, togglePaymentMethod,
     pickPaymentQr, removePaymentQr, navigateTo, refreshSales, cancelSale, simulateSale, loadSalesForDate, syncNow, openScanner,
-    connectFromQr, loadConnectionQr, loadReport, saveSettingsName, saveServer, checkForUpdate, installUpdate, addProduct, createProduct, updateProduct, deleteProductPermanently, removeOne, confirmSale, updateSale,
+    connectFromQr, loadConnectionQr, loadReport, saveSettingsName, saveServer, checkForUpdate, installUpdate, addProduct, createProduct, updateProduct, deleteProductPermanently, removeOne, confirmSale, deleteSale, updateSale,
     selectSearchResult,
   } = app;
   const isDesktop = Platform.OS === 'web' && isWide;
@@ -61,6 +61,9 @@ export function MainShell({ app }: { app: AppState }) {
   const [selectedDaySales, setSelectedDaySales] = useState<OfflineSale[]>([]);
   const [daySalesLoading, setDaySalesLoading] = useState(false);
   const [selectedSale, setSelectedSale] = useState<OfflineSale | null>(null);
+  const [receiptSale, setReceiptSale] = useState<OfflineSale | null>(null);
+  const [saleDeleteTarget, setSaleDeleteTarget] = useState<OfflineSale | null>(null);
+  const [saleDeleteError, setSaleDeleteError] = useState('');
   const [editingSale, setEditingSale] = useState<OfflineSale | null>(null);
   const [selectedPaymentKey, setSelectedPaymentKey] = useState<string | null>(null);
   const [selectedSellerLabel, setSelectedSellerLabel] = useState<string | null>(null);
@@ -89,6 +92,7 @@ export function MainShell({ app }: { app: AppState }) {
   const chartUnit = reportPeriod === 'ano' || reportPeriod === 'historico' ? 'mes' : 'día';
   const chartColor = reportPeriod === 'dia' ? '#1b6b58' : reportPeriod === 'mes' ? '#315b91' : reportPeriod === 'ano' ? '#b27624' : '#7b4f8b';
   const showChartValues = reportPeriod === 'dia' || reportPeriod === 'mes';
+  const reportActiveSeries = reportSeries.filter((item) => Number(item.total) > 0);
   const paymentOptions = [
     { key: 'yape', label: 'Yape', enabledKey: 'yapeEnabled', qrKey: 'yapeQrUri', color: '#7b4f8b' },
     { key: 'plin', label: 'Plin', enabledKey: 'plinEnabled', qrKey: 'plinQrUri', color: '#315b91' },
@@ -126,7 +130,7 @@ export function MainShell({ app }: { app: AppState }) {
     setSelectedDay(date);
     setSelectedDaySales([]);
     setDaySalesLoading(true);
-    const result = await loadSalesForDate(date);
+    const result = await loadSalesForDate(date, reportOrigin);
     setSelectedDaySales(result);
     setDaySalesLoading(false);
   };
@@ -285,19 +289,24 @@ export function MainShell({ app }: { app: AppState }) {
                   </Pressable>
                 ))}
               </View> : null}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reportSummaryScroll}>
+              {isDesktop ? <View style={styles.reportKpiRow}>
+                <View style={styles.reportKpiSlotWide}><Kpi label={reportOrigin === 'historical' ? 'Histórico importado' : 'Ventas del periodo'} value={money(reportSummary.total)} tone="green" /></View>
+                <View style={styles.reportKpiSlotWide}><Kpi label={reportOrigin === 'historical' ? 'Operaciones históricas' : 'Operaciones'} value={String(reportSummary.count)} tone="blue" /></View>
+                <View style={styles.reportKpiSlotWide}><Kpi label="Promedio por operación" value={money(reportSummary.average)} tone="amber" /></View>
+              </View> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reportSummaryScroll}>
                 <View style={styles.reportKpiSlot}><Kpi label={reportOrigin === 'historical' ? 'Histórico importado' : 'Ventas del periodo'} value={money(reportSummary.total)} tone="green" compact={isNarrow} /></View>
                 <View style={styles.reportKpiSlot}><Kpi label={reportOrigin === 'historical' ? 'Operaciones históricas' : 'Operaciones'} value={String(reportSummary.count)} tone="blue" compact={isNarrow} /></View>
                 <View style={styles.reportKpiSlot}><Kpi label="Promedio por operación" value={money(reportSummary.average)} tone="amber" compact={isNarrow} /></View>
-              </ScrollView>
+              </ScrollView>}
               <View style={[styles.panelLarge, isNarrow && styles.panelLargeMobile]}>
                 <SectionTitle compact={isNarrow} eyebrow={reportOrigin === 'historical' ? 'FUENTE · SISTEMA ANTERIOR' : `MOVIMIENTO · ${reportPeriodLabel(reportPeriod).toUpperCase()}`} title={reportOrigin === 'historical' ? 'Evolución importada' : 'Movimiento del periodo'} />
                 <Text style={styles.muted}>{remoteReport ? `${reportDateLabel(remoteReport.from, reportPeriod)} – ${reportDateLabel(remoteReport.to, reportPeriod)} · ${reportOrigin === 'all' ? 'Fuentes combinadas' : reportOrigin === 'historical' ? 'Solo lectura' : 'Ventas actuales'}` : 'Cargando datos del reporte…'}</Text>
                 {reportOrigin === 'all' ? <View style={styles.reportCombinedWarning}><Text style={styles.reportCombinedWarningText}>Vista consolidada: combina ventas actuales e importadas.</Text></View> : null}
                 {reportStale ? <Pressable onPress={() => loadReport(reportPeriod, reportOrigin)} style={styles.flowWarning}><Text style={styles.flowWarningText}>Datos guardados · sin actualizar. Toca para reintentar.</Text></Pressable> : null}
+                {reportActiveSeries.length > 0 ? <View style={styles.reportChartSummary}><Text style={styles.reportChartSummaryText}>{reportActiveSeries.length} {chartUnit}{reportActiveSeries.length === 1 ? '' : 's'} con ventas</Text><Text style={styles.reportChartSummaryValue}>{money(reportSummary.total)}</Text></View> : null}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {reportSeries.length === 0 ? <Empty title="Sin ventas en este periodo" copy="Cambia a otro periodo o registra una venta." compact /> : <View style={[styles.chartLarge, reportSeries.length > 14 && styles.chartLargeWide]}>
-                    {reportSeries.map((item) => {
+                  {reportActiveSeries.length === 0 ? <Empty title="Sin ventas en este periodo" copy="Cambia a otro periodo o registra una venta." compact /> : <View style={[styles.chartLarge, reportActiveSeries.length > 8 && styles.chartLargeWide]}>
+                    {reportActiveSeries.map((item) => {
                       const total = Number(item.total) || 0;
                       const height = total > 0 ? Math.max(10, (total / reportMax) * 128) : 5;
                       return (
@@ -319,14 +328,14 @@ export function MainShell({ app }: { app: AppState }) {
                 <View style={styles.calendarGrid}>{calendarCells.map((day, index) => { if (!day) return <View key={`empty-${index}`} style={styles.calendarCell} />; const date = calendarDateKey(calendarYear, calendarMonthIndex, day); const saleCount = calendarCounts[date] || 0; const hasSales = saleCount > 0; return <Pressable key={date} onPress={() => void openReportDay(date)} style={({ pressed }) => [styles.calendarCell, saleCount >= 5 ? styles.calendarCellBusy : saleCount >= 2 ? styles.calendarCellActive : hasSales && styles.calendarCellMarked, pressed && styles.buttonPressed]}><Text style={[styles.calendarDayText, hasSales && styles.calendarDayTextMarked]}>{day}</Text>{hasSales ? <View style={styles.calendarDot} /> : null}</Pressable>; })}</View>
                 <View style={styles.calendarHintRow}><CalendarDays size={14} color="#6a716d" /><Text style={styles.calendarHint}>Toca un día para ver sus ventas</Text></View>
               </View> : null}
-              <View style={[styles.panelLarge, isNarrow && styles.panelLargeMobile]}>
+              {reportOrigin !== 'current' ? <View style={[styles.panelLarge, isNarrow && styles.panelLargeMobile]}>
                 <SectionTitle compact={isNarrow} eyebrow="HISTÓRICO IMPORTADO" title="Sistema anterior · solo lectura" />
                 <Text style={styles.muted}>Rango de datos: {remoteReport?.historical?.firstDate ? reportDateLabel(remoteReport.historical.firstDate, 'mes') : 'no informado'} – {remoteReport?.historical?.lastDate ? reportDateLabel(remoteReport.historical.lastDate, 'mes') : 'no informado'}.</Text>
                 <View style={styles.historicalRow}>
                   <Stat label="Total acumulado importado" value={money(remoteReport?.historical?.total ?? 0)} />
                   <Stat label="Operaciones históricas" value={String(remoteReport?.historical?.count ?? 0)} />
                 </View>
-              </View>
+              </View> : null}
               <View style={[styles.panelLarge, isNarrow && styles.panelLargeMobile]}>
                 <SectionTitle compact={isNarrow} eyebrow="PRODUCTOS" title="Más vendidos" />
                 {topProducts.length === 0 ? (
@@ -347,14 +356,14 @@ export function MainShell({ app }: { app: AppState }) {
                <View style={styles.panel}>
                 <SectionTitle compact={isNarrow} eyebrow="DETALLES DEL REPORTE" title="Medios de pago" />
                 <Text style={styles.muted}>{reportOrigin === 'historical' ? 'Importado · solo lectura' : 'Toca un medio para ver el detalle.'}</Text>
-                {paymentBreakdown.map((item) => (
-                  <Pressable key={item.key} onPress={() => setSelectedPaymentKey(item.key)} style={({ pressed }) => [styles.paymentReportRow, !item.enabled && styles.paymentReportRowDisabled, pressed && styles.buttonPressed]}>
+                {paymentBreakdown.filter((item) => item.enabled || item.total > 0).map((item) => (
+                  <Pressable key={item.key} onPress={() => setSelectedPaymentKey(item.key)} style={({ pressed }) => [styles.paymentReportRow, !item.enabled && item.total <= 0 && styles.paymentReportRowDisabled, pressed && styles.buttonPressed]}>
                     <View style={[styles.paymentReportDot, { backgroundColor: item.color }]} />
                     <View style={styles.rowText}>
-                      <Text style={[styles.paymentReportLabel, !item.enabled && styles.paymentReportTextDisabled]}>{item.label}</Text>
-                      <Text style={[styles.paymentReportState, !item.enabled && styles.paymentReportTextDisabled]}>{item.enabled ? 'Activo' : 'Desactivado'} · ver ventas</Text>
+                      <Text style={[styles.paymentReportLabel, !item.enabled && item.total <= 0 && styles.paymentReportTextDisabled]}>{item.label}</Text>
+                      <Text style={[styles.paymentReportState, !item.enabled && item.total <= 0 && styles.paymentReportTextDisabled]}>{item.enabled ? 'Activo' : item.total > 0 ? 'Registrado' : 'Desactivado'} · ver ventas</Text>
                     </View>
-                    <Text style={[styles.paymentReportTotal, !item.enabled && styles.paymentReportTextDisabled]}>{money(item.total)}</Text>
+                    <Text style={[styles.paymentReportTotal, !item.enabled && item.total <= 0 && styles.paymentReportTextDisabled]}>{money(item.total)}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -364,13 +373,13 @@ export function MainShell({ app }: { app: AppState }) {
                   <Empty title="Sin ventas" copy="Aún no hay movimientos para mostrar." compact />
                 ) : (
                   reportScopedSales.slice(0, 4).map((sale) => (
-                    <View key={sale.id} style={styles.miniSale}>
+                    <Pressable key={sale.id} onPress={() => setSelectedSale(sale)} style={({ pressed }) => [styles.miniSale, pressed && styles.buttonPressed]}>
                       <View style={styles.rowText}>
                         <Text style={styles.miniSaleTitle}>{shortDate(sale.createdAt)} | {saleTime(sale.createdAt)}</Text>
-                        <Text style={styles.muted}>{sale.items.length} productos | {sale.seller}</Text>
+                        <Text style={styles.muted}>{sale.items.length} productos · {sale.seller} · ver detalle</Text>
                       </View>
                       <Text style={styles.miniSaleTotal}>{money(sale.total)}</Text>
-                    </View>
+                    </Pressable>
                   ))
                 )}
               </View>
@@ -576,6 +585,7 @@ export function MainShell({ app }: { app: AppState }) {
                 <Pressable onPress={checkForUpdate} disabled={updateChecking} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
                   <Text style={styles.secondaryText}>{updateChecking ? 'Revisando GitHub…' : 'Buscar actualización'}</Text>
                 </Pressable>
+                {updateStatus ? <Text style={styles.connectionHint}>{updateStatus}</Text> : null}
               </View>
                <View style={styles.panel}>
                 <SectionTitle eyebrow="SINCRONIZACION" title="Estado local" />
@@ -696,7 +706,7 @@ export function MainShell({ app }: { app: AppState }) {
                   <Pressable key={sale.id} onPress={() => { setSelectedSellerLabel(null); setSelectedSale(sale); }} style={({ pressed }) => [styles.daySaleRow, pressed && styles.buttonPressed]}>
                     <View style={styles.rowText}>
                       <Text style={styles.daySaleTitle}>{shortDate(sale.createdAt)} · {saleTime(sale.createdAt)}</Text>
-                      <Text style={styles.muted}>{sale.items.map((item: any) => `${item.name || 'Producto'} × ${item.quantity || 1}`).join(' · ')}</Text>
+                      <Text style={styles.muted}>{sale.seller || 'Sin nombre'} · {sale.items.map((item: any) => `${item.name || 'Producto'} × ${item.quantity || 1}`).join(' · ')}</Text>
                     </View>
                     <Text style={styles.daySaleTotal}>{money(sale.total)}</Text>
                   </Pressable>
@@ -724,9 +734,18 @@ export function MainShell({ app }: { app: AppState }) {
               <Text style={styles.saleDetailMetaText}>{selectedSale.status === 'synced' ? 'Sincronizada' : 'Pendiente'}</Text>
               <Text style={styles.saleDetailMetaText}>{selectedSale.paymentMethod === 'digital' ? 'Pago digital' : 'Efectivo'}</Text>
             </View>
-            {screen !== 'report' ? <Pressable onPress={() => setEditingSale(selectedSale)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
-              <Text style={styles.secondaryText}>Editar vendedor y productos</Text>
-            </Pressable> : <Text style={styles.reportReadOnlyHint}>Detalle de reporte · solo lectura</Text>}
+            <View style={styles.saleDetailActions}>
+              <Pressable onPress={() => setReceiptSale(selectedSale)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
+                <Text style={styles.secondaryText}>Ver boleta</Text>
+              </Pressable>
+              {screen !== 'report' ? <Pressable onPress={() => setEditingSale(selectedSale)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
+                <Text style={styles.secondaryText}>Editar vendedor y productos</Text>
+              </Pressable> : null}
+              {screen === 'report' && !selectedSale.readOnly && selectedSale.origin !== 'historical' ? <Pressable onPress={() => { setSaleDeleteError(''); setSaleDeleteTarget(selectedSale); }} style={({ pressed }) => [styles.dangerOutlineButton, pressed && styles.buttonPressed]}>
+                <Text style={styles.dangerOutlineText}>Anular venta</Text>
+              </Pressable> : null}
+            </View>
+            {screen === 'report' && reportOrigin === 'historical' ? <Text style={styles.reportReadOnlyHint}>Histórico importado · solo lectura</Text> : null}
             <ScrollView style={styles.saleDetailItems}>
               {selectedSale.items.map((item: any, index: number) => {
                 const quantity = Number(item.quantity || 1);
@@ -743,6 +762,63 @@ export function MainShell({ app }: { app: AppState }) {
               })}
             </ScrollView>
             <View style={styles.dayModalTotal}><Text style={styles.dayModalTotalLabel}>Total de la venta</Text><Text style={styles.dayModalTotalValue}>{money(selectedSale.total)}</Text></View>
+          </View>
+        </View>
+      ) : null}
+
+      {receiptSale ? (
+        <View style={styles.dayModalOverlay}>
+          <Pressable onPress={() => setReceiptSale(null)} style={styles.dayModalDismiss} />
+          <View style={styles.receiptCard}>
+            <View style={styles.receiptHeader}>
+              <Image source={require('../papachito-logo.jpg')} style={styles.receiptLogo} />
+              <Text style={styles.receiptBrand}>DONDE PAPACHITO</Text>
+              <Text style={styles.receiptTitle}>BOLETA SIMPLE</Text>
+              <Text style={styles.receiptMeta}>Comprobante interno · no tributario</Text>
+              <Text style={styles.receiptMeta}>{reportDateLabel(receiptSale.createdAt, 'dia')} · {saleTime(receiptSale.createdAt)}</Text>
+              <Text style={styles.receiptMeta}>Atendió: {receiptSale.seller || 'Sin nombre'}</Text>
+            </View>
+            <ScrollView style={styles.receiptItems}>
+              {receiptSale.items.map((item: any, index: number) => {
+                const quantity = Number(item.quantity || 1);
+                const price = Number(item.price || item.unitPrice || 0);
+                return <View key={`${receiptSale.id}-receipt-${index}`} style={styles.receiptItemRow}>
+                  <Text style={styles.receiptItemName}>{quantity} × {item.name || 'Producto'}</Text>
+                  <Text style={styles.receiptItemPrice}>{money(quantity * price)}</Text>
+                </View>;
+              })}
+            </ScrollView>
+            <View style={styles.receiptTotalRow}><Text style={styles.receiptTotalLabel}>TOTAL</Text><Text style={styles.receiptTotalValue}>{money(receiptSale.total)}</Text></View>
+            <Text style={styles.receiptMeta}>Pago: {receiptSale.paymentMethod === 'digital' ? 'Digital' : 'Efectivo'}</Text>
+            <Pressable onPress={() => setReceiptSale(null)} style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}><Text style={styles.primaryText}>Cerrar</Text></Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {saleDeleteTarget ? (
+        <View style={styles.dayModalOverlay}>
+          <Pressable onPress={() => setSaleDeleteTarget(null)} style={styles.dayModalDismiss} />
+          <View style={styles.deleteSaleCard}>
+            <Text style={styles.eyebrow}>CONFIRMACIÓN</Text>
+            <Text style={styles.deleteSaleTitle}>Anular venta</Text>
+            <Text style={styles.deleteSaleCopy}>Se quitará esta operación del reporte y se anulará en el servidor si ya estaba sincronizada.</Text>
+            <Text style={styles.muted}>{reportDateLabel(saleDeleteTarget.createdAt, 'dia')} · {saleTime(saleDeleteTarget.createdAt)} · {saleDeleteTarget.seller || 'Sin nombre'} · {money(saleDeleteTarget.total)}</Text>
+            {saleDeleteError ? <View style={styles.deleteSaleError}><Text style={styles.deleteSaleErrorText}>{saleDeleteError}</Text></View> : null}
+            <View style={styles.saleDetailActions}>
+              <Pressable onPress={() => setSaleDeleteTarget(null)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}><Text style={styles.secondaryText}>Cancelar</Text></Pressable>
+              <Pressable disabled={Boolean(cancellingSaleId)} onPress={async () => {
+                try {
+                  await deleteSale(saleDeleteTarget);
+                  await loadReport(reportPeriod, reportOrigin);
+                  setSaleDeleteTarget(null);
+                  setSelectedSale(null);
+                } catch (error: any) {
+                  setSaleDeleteError(error?.message || 'No se pudo anular la venta.');
+                }
+              }} style={({ pressed }) => [styles.productDeleteConfirmButton, Boolean(cancellingSaleId) && styles.buttonDisabled, pressed && styles.buttonPressed]}>
+                <Text style={styles.productDeleteConfirmText}>{cancellingSaleId ? 'Anulando…' : 'Anular venta'}</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       ) : null}

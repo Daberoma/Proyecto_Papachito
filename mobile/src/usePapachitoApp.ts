@@ -20,6 +20,8 @@ const remoteSaleToOffline = (sale: any): OfflineSale => ({
   paymentLabel: sale.payment_method_name || undefined,
   createdAt: sale.sold_at || new Date().toISOString(),
   status: 'synced',
+  origin: sale.origin === 'historical' ? 'historical' : 'current',
+  readOnly: sale.origin === 'historical',
 });
 
 const mergeSales = (local: OfflineSale[], remote: OfflineSale[]) => {
@@ -84,6 +86,7 @@ export function usePapachitoApp() {
   const [paymentConfig, setPaymentConfigState] = useState<PaymentConfig>({ yapeEnabled: true, plinEnabled: false, bbvaEnabled: false });
   const [availableUpdate, setAvailableUpdate] = useState<GithubApkUpdate | null>(null);
   const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState('');
   const [updateInstalling, setUpdateInstalling] = useState(false);
   const [updateDownloadProgress, setUpdateDownloadProgress] = useState<ApkDownloadProgress | null>(null);
   const [connectionQr, setConnectionQr] = useState<ConnectionQr | null>(null);
@@ -304,30 +307,36 @@ export function usePapachitoApp() {
     await refreshSales();
   }, [refreshSales]);
 
+  const deleteSale = useCallback(async (sale: OfflineSale) => {
+    if (cancellingSaleId) return;
+    setCancellingSaleId(sale.id);
+    try {
+      if (sale.remoteUuid) {
+        const base = await detectApiBase(apiCandidates);
+        const response = await fetch(`${base}/api/ventas/${encodeURIComponent(sale.remoteUuid)}`, { method: 'DELETE' });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) throw new Error(payload.message || 'No se pudo anular');
+      }
+      await removeSale(sale.id);
+      await refreshSales();
+    } finally {
+      setCancellingSaleId('');
+    }
+  }, [cancellingSaleId, refreshSales]);
+
   const cancelSale = useCallback((sale: OfflineSale) => {
     Alert.alert('Eliminar venta', 'La venta se quitará del historial local y, si ya fue enviada, se anulará en la base de datos.', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Eliminar', style: 'destructive', onPress: async () => {
-        if (cancellingSaleId) return;
-        setCancellingSaleId(sale.id);
         try {
-          if (sale.remoteUuid) {
-            const base = await detectApiBase(apiCandidates);
-            const response = await fetch(`${base}/api/ventas/${encodeURIComponent(sale.remoteUuid)}`, { method: 'DELETE' });
-            const payload = await response.json();
-            if (!response.ok || !payload.ok) throw new Error(payload.message || 'No se pudo anular');
-          }
-          await removeSale(sale.id);
-          await refreshSales();
+          await deleteSale(sale);
           Alert.alert('Venta eliminada', 'La operación fue quitada correctamente.');
         } catch (error: any) {
           Alert.alert('No se pudo eliminar', error?.message || 'Revisa la conexión e inténtalo de nuevo.');
-        } finally {
-          setCancellingSaleId('');
         }
       } },
     ]);
-  }, [cancellingSaleId, refreshSales]);
+  }, [deleteSale]);
 
   const simulateSale = useCallback(async () => {
     const product = products[0];
@@ -784,21 +793,31 @@ export function usePapachitoApp() {
     try {
       const update = await checkGithubApkUpdate();
       setAvailableUpdate(update);
-      if (!update) Alert.alert('Sin novedades', `Ya tienes la versión ${installedVersion}.`);
+      if (update) {
+        setUpdateStatus(`Nueva versión ${update.version} disponible para descargar.`);
+      } else {
+        const message = Platform.OS === 'web'
+          ? 'Panel de computadora actualizado. Los APK se actualizan desde el teléfono.'
+          : `Ya estás actualizado: versión ${installedVersion}.`;
+        setUpdateStatus(message);
+        Alert.alert('Actualizado', message);
+      }
     } catch (error: any) {
-      Alert.alert('No se pudo revisar', error?.message || 'Revisa tu conexión e inténtalo nuevamente.');
+      const message = error?.message || 'Revisa tu conexión e inténtalo nuevamente.';
+      setUpdateStatus(`No se pudo revisar: ${message}`);
+      Alert.alert('No se pudo revisar', message);
     } finally {
       setUpdateChecking(false);
     }
   }, []);
 
-  const loadSalesForDate = useCallback(async (date: string): Promise<OfflineSale[]> => {
+  const loadSalesForDate = useCallback(async (date: string, origin: ReportOrigin = reportOrigin): Promise<OfflineSale[]> => {
     const local = await getSales();
     const localForDay = local.filter((sale) => sale.createdAt.slice(0, 10) === date);
     try {
       const base = await getApiBase();
       if (!base) return localForDay;
-      const response = await fetch(`${base}/api/ventas?desde=${date}&hasta=${date}`, { signal: AbortSignal.timeout(3500) });
+      const response = await fetch(`${base}/api/ventas?desde=${date}&hasta=${date}&origen=${origin}&estado=completed`, { signal: AbortSignal.timeout(3500) });
       const payload = await response.json();
       if (!response.ok || !payload.ok || !Array.isArray(payload.sales)) return localForDay;
       const remote = payload.sales.map(remoteSaleToOffline);
@@ -806,7 +825,7 @@ export function usePapachitoApp() {
     } catch {
       return localForDay;
     }
-  }, []);
+  }, [reportOrigin]);
 
   const installUpdate = useCallback(async () => {
     if (!availableUpdate) return;
@@ -1032,12 +1051,12 @@ export function usePapachitoApp() {
     insets, isWide, isNarrow, productCardWidth, booting, hasProfile, setupName, sellerName, settingsName, screen, products, cart, sales,
     online, apiBase, connectionQr, loadingCatalog, search, category, cartOpen, paymentMethod, reportPeriod, reportOrigin, remoteReport, reportDetailSales, calendarSaleCounts,
     reportLoading, reportStale, scannerOpen, searchingServer, lastSyncAt, paymentConfig, savedApiBases, addedProductPulse, availableUpdate,
-    updateChecking, updateInstalling, updateDownloadProgress, installedVersion, installedVersionCode, pendingCount, cartTotal, categories, searchText, saleSubmitting, syncing, syncError, serverSaving, cancellingSaleId, catalogUsingCache,
+    updateChecking, updateInstalling, updateDownloadProgress, updateStatus, installedVersion, installedVersionCode, pendingCount, cartTotal, categories, searchText, saleSubmitting, syncing, syncError, serverSaving, cancellingSaleId, catalogUsingCache,
     filteredProducts, filteredSales, visibleSales, searchResults, todaySales, todayTotal, reportTotal, topProducts, paymentBreakdown,
     sellerBreakdown, maxProductTotal, maxPaymentTotal, maxSellerTotal, reportSummary, reportSeries, reportMax, setSetupName,
     setSettingsName, setApiBaseState, setSearch, setCategory, setCartOpen, setPaymentMethod, setReportPeriod, setReportOrigin, setScannerOpen,
     togglePaymentMethod, pickPaymentQr, removePaymentQr, navigateTo, refreshSales, cancelSale, simulateSale, loadSalesForDate,
     syncNow, openScanner, connectFromQr, loadConnectionQr, loadReport, continueSetup, saveSettingsName, saveServer, checkForUpdate, installUpdate, updateSale,
-    addProduct, createProduct, updateProduct, deleteProductPermanently, removeOne, confirmSale, selectSearchResult,
+    addProduct, createProduct, updateProduct, deleteProductPermanently, removeOne, confirmSale, deleteSale, selectSearchResult,
   };
 }

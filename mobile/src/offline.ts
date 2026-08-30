@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 export type PaymentProvider = 'cash' | 'yape' | 'plin' | 'bbva' | 'digital_unknown';
-export type OfflineSale={id:string,seller:string,items:any[],total:number,paymentMethod?:'cash'|'digital',paymentProvider?:PaymentProvider,paymentLabel?:string,createdAt:string,status:'pending'|'synced'|'error',remoteUuid?:string,error?:string};
+export type OfflineSale={id:string,seller:string,items:any[],total:number,paymentMethod?:'cash'|'digital',paymentProvider?:PaymentProvider,paymentLabel?:string,createdAt:string,status:'pending'|'synced'|'error',remoteUuid?:string,error?:string,origin?:'current'|'historical',readOnly?:boolean};
 const SALES_KEY='papachito.offline.sales';
 const SELLER_KEY='papachito.seller';
 const API_KEY='papachito.api.base';
